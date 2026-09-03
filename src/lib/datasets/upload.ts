@@ -2,6 +2,7 @@ import "server-only";
 
 import type { ActionState } from "@/lib/auth/action-state";
 import { requireUser } from "@/lib/auth/session";
+import { analyzeAndPersistAutomatedIssues } from "@/lib/data-quality/persistence";
 import { parseCsvBuffer } from "@/lib/datasets/csv-parser";
 import { DATASET_STORAGE_BUCKET } from "@/lib/datasets/constants";
 import { profileCsv } from "@/lib/datasets/profiler";
@@ -16,6 +17,11 @@ import type { WorkspaceRole } from "@/types";
 type DatasetInsertRow = {
   id: string;
   workspace_id: string;
+};
+
+type DatasetColumnInsertRow = {
+  id: string;
+  position: number;
 };
 
 const UPLOAD_ROLES = new Set<WorkspaceRole>(["owner", "admin", "member"]);
@@ -146,14 +152,19 @@ export async function uploadDataset(formData: FormData): Promise<ActionState> {
       unique_count: column.uniqueCount,
     }));
 
+    let insertedColumns: DatasetColumnInsertRow[] = [];
+
     if (columnRows.length > 0) {
-      const { error: columnsError } = await supabase
+      const { data: columns, error: columnsError } = await supabase
         .from("dataset_columns")
-        .insert(columnRows);
+        .insert(columnRows)
+        .select("id, position");
 
       if (columnsError) {
         throw new Error(columnsError.message);
       }
+
+      insertedColumns = (columns ?? []) as DatasetColumnInsertRow[];
     }
 
     const { error: readyError } = await supabase
@@ -173,6 +184,19 @@ export async function uploadDataset(formData: FormData): Promise<ActionState> {
     await recordDatasetActivity(dataset.id, "dataset.ready", {
       rows: profile.rowCount,
       columns: profile.columnCount,
+    });
+
+    await analyzeAndPersistAutomatedIssues({
+      workspaceId: dataset.workspace_id,
+      datasetId: dataset.id,
+      createdBy: user.id,
+      columns: insertedColumns,
+      context: {
+        headers: parsedCsv.headers,
+        rawHeaders: parsedCsv.rawHeaders,
+        rows: parsedCsv.rows,
+        profile,
+      },
     });
 
     return {

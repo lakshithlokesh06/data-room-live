@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Database, FileUp } from "lucide-react";
 
+import { SeverityBadge } from "@/components/data-quality/issue-badges";
 import { DatasetStatusBadge } from "@/components/datasets/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,11 +12,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getDatasetIssueSignals } from "@/lib/data-quality/queries";
 import { listAccessibleDatasets } from "@/lib/datasets/queries";
 import { formatBytes } from "@/lib/datasets/validation";
 
 export default async function DatasetsPage() {
   const datasets = await listAccessibleDatasets();
+  const issueSignals = await getDatasetIssueSignals(
+    datasets.map((dataset) => dataset.id)
+  );
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -64,6 +69,7 @@ export default async function DatasetsPage() {
                   <th className="py-3 pr-4 font-medium">Status</th>
                   <th className="py-3 pr-4 font-medium">Rows</th>
                   <th className="py-3 pr-4 font-medium">Columns</th>
+                  <th className="py-3 pr-4 font-medium">Quality</th>
                   <th className="py-3 pr-4 font-medium">Uploader</th>
                   <th className="py-3 pr-4 font-medium">Created</th>
                 </tr>
@@ -98,6 +104,16 @@ export default async function DatasetsPage() {
                       {formatCount(dataset.columnCount)}
                     </td>
                     <td className="py-3 pr-4 align-top">
+                      <QualitySignal
+                        issueCount={
+                          issueSignals.get(dataset.id)?.issueCount ?? 0
+                        }
+                        highestSeverity={
+                          issueSignals.get(dataset.id)?.highestSeverity ?? null
+                        }
+                      />
+                    </td>
+                    <td className="py-3 pr-4 align-top">
                       {dataset.uploaderName}
                     </td>
                     <td className="py-3 pr-4 align-top">
@@ -123,4 +139,23 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function QualitySignal({
+  issueCount,
+  highestSeverity,
+}: {
+  issueCount: number;
+  highestSeverity: Parameters<typeof SeverityBadge>[0]["severity"] | null;
+}) {
+  if (issueCount === 0 || !highestSeverity) {
+    return <span className="text-muted-foreground">No open issues</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <SeverityBadge severity={highestSeverity} />
+      <span>{issueCount.toLocaleString()} open</span>
+    </div>
+  );
 }

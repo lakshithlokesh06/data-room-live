@@ -31,6 +31,8 @@ export const activityEventTypes = [
   "dataset.upload_started",
   "dataset.ready",
   "dataset.processing_failed",
+  "dataset.quality_analysis_completed",
+  "dataset.quality_issues_detected",
   "issue.opened",
   "issue.assigned",
   "issue.resolved",
@@ -38,6 +40,25 @@ export const activityEventTypes = [
 ] as const;
 
 export type ActivityEventType = (typeof activityEventTypes)[number];
+
+export const dataQualityIssueTypes = [
+  "missing_values",
+  "duplicate_rows",
+  "constant_column",
+  "high_cardinality",
+  "mixed_types",
+  "numeric_outliers",
+  "inconsistent_categories",
+  "invalid_dates",
+  "whitespace_anomaly",
+  "unnamed_column",
+] as const;
+
+export type DataQualityIssueType = (typeof dataQualityIssueTypes)[number];
+
+export const issueSources = ["manual", "automated"] as const;
+
+export type IssueSource = (typeof issueSources)[number];
 
 export interface Workspace {
   id: string;
@@ -98,6 +119,9 @@ export interface DataQualityIssue {
   status: IssueStatus;
   assignedTo: string | null;
   createdBy: string;
+  source: IssueSource;
+  detectionMetadata: Record<string, unknown> | null;
+  automatedIssueKey: string | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;

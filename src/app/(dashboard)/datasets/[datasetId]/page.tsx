@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, TableProperties } from "lucide-react";
 
+import {
+  formatIssueType,
+  IssueStatusBadge,
+  SeverityBadge,
+} from "@/components/data-quality/issue-badges";
 import { DatasetStatusBadge } from "@/components/datasets/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,20 +17,41 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  listDatasetQualityIssues,
+  parseQualityIssueFilters,
+  type QualityIssueListItem,
+} from "@/lib/data-quality/queries";
 import { getDatasetDetail } from "@/lib/datasets/queries";
 import { formatBytes } from "@/lib/datasets/validation";
+import {
+  dataQualityIssueTypes,
+  issueSeverities,
+  type DataQualityIssueType,
+  type IssueSeverity,
+} from "@/types";
 
 export default async function DatasetDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ datasetId: string }>;
+  searchParams: Promise<{
+    severity?: string | string[];
+    issueType?: string | string[];
+  }>;
 }) {
   const { datasetId } = await params;
+  const filters = parseQualityIssueFilters(await searchParams);
   const dataset = await getDatasetDetail(datasetId);
 
   if (!dataset) {
     notFound();
   }
+
+  const allQualityIssues = await listDatasetQualityIssues(datasetId);
+  const filteredQualityIssues = filterQualityIssues(allQualityIssues, filters);
+  const severityCounts = countBySeverity(allQualityIssues);
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -76,6 +102,109 @@ export default async function DatasetDetailPage({
           </CardHeader>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Data Quality</CardTitle>
+          <CardDescription>
+            Automatically generated findings from the CSV profiling pass.
+          </CardDescription>
+          <CardAction>
+            <span className="text-sm text-muted-foreground">
+              {allQualityIssues.length.toLocaleString()} open
+            </span>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <div className="grid gap-3 md:grid-cols-4">
+            {issueSeverities.map((severity) => (
+              <div className="rounded-lg border p-3" key={severity}>
+                <div className="mb-2">
+                  <SeverityBadge severity={severity} />
+                </div>
+                <div className="text-2xl font-semibold">
+                  {severityCounts[severity].toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <FilterLink
+              active={!filters.severity && !filters.issueType}
+              datasetId={dataset.id}
+              label="All"
+            />
+            {issueSeverities.map((severity) => (
+              <FilterLink
+                active={filters.severity === severity}
+                datasetId={dataset.id}
+                key={severity}
+                label={severity.charAt(0).toUpperCase() + severity.slice(1)}
+                severity={severity}
+              />
+            ))}
+            {dataQualityIssueTypes.map((issueType) => (
+              <FilterLink
+                active={filters.issueType === issueType}
+                datasetId={dataset.id}
+                issueType={issueType}
+                key={issueType}
+                label={formatIssueType(issueType)}
+              />
+            ))}
+          </div>
+
+          {filteredQualityIssues.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[780px] text-left text-sm">
+                <thead className="border-b text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="py-3 pr-4 font-medium">Issue</th>
+                    <th className="py-3 pr-4 font-medium">Type</th>
+                    <th className="py-3 pr-4 font-medium">Column</th>
+                    <th className="py-3 pr-4 font-medium">Severity</th>
+                    <th className="py-3 pr-4 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {filteredQualityIssues.map((issue) => (
+                    <tr key={issue.id}>
+                      <td className="py-3 pr-4 align-top">
+                        <Link
+                          className="font-medium underline-offset-4 hover:underline"
+                          href={`/issues/${issue.id}`}
+                        >
+                          {issue.title}
+                        </Link>
+                        <p className="mt-1 max-w-xl text-xs text-muted-foreground">
+                          {issue.description}
+                        </p>
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        {formatIssueType(issue.issueType)}
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        {issue.columnName ?? "Dataset"}
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        <SeverityBadge severity={issue.severity} />
+                      </td>
+                      <td className="py-3 pr-4 align-top">
+                        <IssueStatusBadge status={issue.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No open automated issues match the current filters.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -132,6 +261,64 @@ export default async function DatasetDetailPage({
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+function FilterLink({
+  active,
+  datasetId,
+  label,
+  severity,
+  issueType,
+}: {
+  active: boolean;
+  datasetId: string;
+  label: string;
+  severity?: IssueSeverity;
+  issueType?: DataQualityIssueType;
+}) {
+  const params = new URLSearchParams();
+
+  if (severity) {
+    params.set("severity", severity);
+  }
+
+  if (issueType) {
+    params.set("issueType", issueType);
+  }
+
+  const query = params.toString();
+
+  return (
+    <Button asChild size="sm" variant={active ? "secondary" : "outline"}>
+      <Link href={`/datasets/${datasetId}${query ? `?${query}` : ""}`}>
+        {label}
+      </Link>
+    </Button>
+  );
+}
+
+function filterQualityIssues(
+  issues: QualityIssueListItem[],
+  filters: {
+    severity?: IssueSeverity;
+    issueType?: DataQualityIssueType;
+  }
+) {
+  return issues.filter(
+    (issue) =>
+      (!filters.severity || issue.severity === filters.severity) &&
+      (!filters.issueType || issue.issueType === filters.issueType)
+  );
+}
+
+function countBySeverity(issues: QualityIssueListItem[]) {
+  return issues.reduce<Record<IssueSeverity, number>>(
+    (counts, issue) => {
+      counts[issue.severity] += 1;
+      return counts;
+    },
+    { low: 0, medium: 0, high: 0, critical: 0 }
   );
 }
 

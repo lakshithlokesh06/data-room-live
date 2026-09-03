@@ -12,7 +12,7 @@
 
 `dataset_columns` stores profiling metadata for each dataset column, including position, detected type, nullability, missing count, and unique count.
 
-`data_quality_issues` stores the issue-management foundation with workspace, dataset, optional column, severity, status, assignment, creator, timestamps, and resolution timestamp.
+`data_quality_issues` stores the issue-management foundation with workspace, dataset, optional column, stable issue type, severity, status, assignment, creator, source, compact detection metadata, automated issue key, timestamps, and resolution timestamp.
 
 `issue_comments` stores future issue discussion content.
 
@@ -22,7 +22,7 @@
 
 All application records use UUID primary keys. Workspace-owned data cascades when a workspace is deleted. User-owned membership rows cascade when an auth user is deleted; authored workspace, dataset, issue, and comment records restrict auth-user deletion to preserve ownership history.
 
-Important constraints include unique workspace slugs, unique workspace membership per user, supported role/status/severity checks, nonnegative file/profile counts, dataset column uniqueness by position and name, immutable dataset workspace/uploader identity, and issue resolution consistency between `status` and `resolved_at`.
+Important constraints include unique workspace slugs, unique workspace membership per user, supported role/status/severity/source checks, stable automated issue type checks, nonnegative file/profile counts, dataset column uniqueness by position and name, immutable dataset workspace/uploader identity, automated issue key consistency, and issue resolution consistency between `status` and `resolved_at`.
 
 ## Role Model
 
@@ -39,6 +39,7 @@ RLS is enabled on every application table. Access derives from workspace members
 - Issues and comments are readable by workspace members; viewers cannot write.
 - Activity events are readable by workspace members and have no client insert/update/delete policy.
 - Dataset Storage objects are readable by workspace members through private Storage policies. Upload, update, and delete are limited to owner, admin, and member roles and require a matching dataset row and path.
+- Direct client inserts and updates to `data_quality_issues` are limited to `source = 'manual'`. Automated issues are created by server-only code after authorization checks.
 
 ## Helper Functions
 
@@ -57,3 +58,9 @@ Phase 3 adds Storage-specific helpers: `try_parse_uuid`, `dataset_storage_worksp
 ## Dataset Activity RPC
 
 `public.record_dataset_activity(target_dataset_id, target_event_type, event_metadata)` records dataset upload lifecycle events for authenticated workspace writers. Supported event types are `dataset.upload_started`, `dataset.ready`, and `dataset.processing_failed`. Payloads contain operational metadata such as filename, byte size, row count, column count, or a bounded failure reason. They must not contain secrets or raw CSV content.
+
+Phase 4 extends dataset activity with `dataset.quality_analysis_completed` and `dataset.quality_issues_detected`. Those events store issue counts and severity summaries only.
+
+## Automated Issue Metadata
+
+Automated quality issues use `source = 'automated'`, a deterministic `automated_issue_key`, and compact `detection_metadata`. The uploader remains `created_by` so the existing non-null Auth foreign key is preserved without a fake system user. Reprocessing clears and recreates only automated issues for the dataset; manual issues are untouched.

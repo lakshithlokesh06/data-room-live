@@ -8,6 +8,7 @@ export class CsvParseError extends Error {
 }
 
 export type ParsedCsv = {
+  rawHeaders: string[];
   headers: string[];
   rows: string[][];
 };
@@ -32,9 +33,13 @@ export function parseCsvBuffer(buffer: Buffer): ParsedCsv {
     throw new CsvParseError("The CSV is empty.");
   }
 
-  const headers = records[0].map((header) => String(header).trim());
+  const rawHeaders = records[0].map((header) => String(header));
+  const headers = rawHeaders.map((header, index) => {
+    const trimmedHeader = header.trim();
+    return trimmedHeader || `Unnamed column ${index + 1}`;
+  });
 
-  if (headers.length === 0 || headers.every((header) => header.length === 0)) {
+  if (headers.length === 0) {
     throw new CsvParseError("The CSV must include a header row.");
   }
 
@@ -51,6 +56,7 @@ export function parseCsvBuffer(buffer: Buffer): ParsedCsv {
   }
 
   return {
+    rawHeaders,
     headers,
     rows: records.slice(1).map((row) => row.map((value) => String(value))),
   };
