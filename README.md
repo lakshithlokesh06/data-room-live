@@ -25,7 +25,7 @@ DataRoom Live is a production-quality portfolio project for a real-time collabor
 
 ## Current Project Status
 
-Phase 2 is complete: database foundation and authentication. The app now includes Supabase schema migrations, Row Level Security policies, SSR auth session refresh through Next.js Proxy, login/signup flows, protected dashboard routes, authenticated account display, and atomic workspace creation. Dataset uploads, profiling, issue-management UI, comments UI, and realtime collaboration are intentionally not implemented yet.
+Phase 3 is complete: dataset upload, private Supabase Storage, and CSV profiling. The app now includes Supabase schema migrations, Row Level Security policies, SSR auth session refresh through Next.js Proxy, login/signup flows, protected dashboard routes, authenticated account display, atomic workspace creation, CSV upload validation, private dataset file storage, dataset listing, dataset detail views, signed CSV downloads, and deterministic column profiling. Issue-management UI, comments UI, invitations, notifications, realtime collaboration, row previews, and advanced analytics are intentionally not implemented yet.
 
 ## Local Setup
 
@@ -57,7 +57,7 @@ Open `http://localhost:3000` after the dev server starts.
 supabase db push
 ```
 
-If you are using the Supabase dashboard instead of the CLI, run the SQL in `supabase/migrations/202609030001_database_auth_foundation.sql`.
+If you are using the Supabase dashboard instead of the CLI, run the SQL files in `supabase/migrations/` in filename order. The Phase 3 migration creates the private `datasets` Storage bucket and the Storage RLS policies used by CSV uploads and downloads.
 
 ## Authentication Configuration
 
@@ -83,11 +83,13 @@ src/
     page.tsx
     globals.css
   components/
+    datasets/
     layout/
     shared/
     ui/
   lib/
     auth/
+    datasets/
     supabase/
     validation/
     workspaces/
@@ -102,9 +104,7 @@ public/
 ## Development Roadmap
 
 1. Build workspace detail pages and role-aware member read surfaces.
-2. Add dataset registration metadata UI without file uploads.
-3. Add dataset upload, Supabase Storage buckets, and CSV parsing.
-4. Add dataset profiling and metadata inspection.
-5. Implement issue creation, assignment, status transitions, and comments.
-6. Add Supabase Realtime subscriptions for activity and collaboration surfaces.
-7. Add deeper test coverage, seed data, and deployment documentation.
+2. Add issue creation, assignment, status transitions, and comments.
+3. Add Supabase Realtime subscriptions for activity and collaboration surfaces.
+4. Add invitations and role management surfaces.
+5. Add deeper test coverage, seed data, and deployment documentation.

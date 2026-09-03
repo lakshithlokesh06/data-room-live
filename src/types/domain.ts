@@ -28,6 +28,9 @@ export const activityEventTypes = [
   "workspace.created",
   "member.added",
   "dataset.registered",
+  "dataset.upload_started",
+  "dataset.ready",
+  "dataset.processing_failed",
   "issue.opened",
   "issue.assigned",
   "issue.resolved",
@@ -65,6 +68,7 @@ export interface Dataset {
   status: DatasetStatus;
   rowCount: number | null;
   columnCount: number | null;
+  processingError: string | null;
   uploadedBy: string;
   createdAt: string;
   updatedAt: string;

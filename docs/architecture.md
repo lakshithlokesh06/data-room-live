@@ -11,12 +11,22 @@ The initial route structure is intentionally small:
 - `/auth/callback` exchanges Supabase email confirmation codes for SSR sessions.
 - `/dashboard`, `/workspaces`, `/datasets`, and `/activity` are protected by the `(dashboard)` route-group layout.
 - `/workspaces` lists RLS-visible workspaces and creates new workspaces through the database RPC.
+- `/datasets` lists RLS-visible datasets across the user's workspaces.
+- `/datasets/new` uploads CSV files for owner, admin, and member roles.
+- `/datasets/[datasetId]` shows dataset metadata and stored column profiling.
+- `/datasets/[datasetId]/download` checks membership and redirects to a short-lived signed Storage URL.
 
-Reusable UI is split into `src/components/ui` for shadcn primitives, `src/components/layout` for app chrome, `src/components/auth` for auth forms, `src/components/workspaces` for workspace-specific UI, and `src/components/shared` for reusable product building blocks.
+Reusable UI is split into `src/components/ui` for shadcn primitives, `src/components/layout` for app chrome, `src/components/auth` for auth forms, `src/components/workspaces` for workspace-specific UI, `src/components/datasets` for dataset-specific upload and status components, and `src/components/shared` for reusable product building blocks.
 
 ## API Architecture
 
-API work uses Next.js Route Handlers under `src/app/api` and `src/app/auth`. The `/api/health` route verifies the route-handler surface without business logic. The `/auth/callback` route handles Supabase PKCE/email confirmation callbacks. Future API routes should stay thin and delegate validation, authorization checks, and persistence logic to server-only modules.
+API work uses Next.js Route Handlers under `src/app/api`, `src/app/auth`, and protected route groups. The `/api/health` route verifies the route-handler surface without business logic. The `/auth/callback` route handles Supabase PKCE/email confirmation callbacks. The dataset download route delegates authorization and signed URL creation to `src/lib/datasets/queries.ts`. Future API routes should stay thin and delegate validation, authorization checks, and persistence logic to server-only modules.
+
+## Dataset Processing Flow
+
+Dataset upload logic lives in server-only modules under `src/lib/datasets`. `validation.ts` centralizes file size, extension, and MIME checks. `csv-parser.ts` uses `csv-parse` rather than string splitting. `profiler.ts` infers deterministic column metadata without storing raw rows. `upload.ts` owns the mutation flow from pending dataset creation through private Storage upload, CSV parsing, `dataset_columns` inserts, ready or failed status updates, and activity event recording.
+
+The current implementation buffers CSV files server-side, capped at 20 MB. That keeps Phase 3 simple while avoiding browser-side parsing and raw row persistence.
 
 ## Supabase Architecture
 
@@ -36,9 +46,11 @@ Protected pages also call `requireUser()` from `src/lib/auth/session.ts`, so Pro
 
 ## Database Architecture
 
-The Phase 2 migration creates `profiles`, `workspaces`, `workspace_members`, `datasets`, `dataset_columns`, `data_quality_issues`, `issue_comments`, and `activity_events`. RLS is enabled on every application table. Membership checks use narrow `SECURITY DEFINER` helper functions with explicit `search_path = public` to avoid recursive policies on `workspace_members`.
+The Phase 2 migration creates `profiles`, `workspaces`, `workspace_members`, `datasets`, `dataset_columns`, `data_quality_issues`, `issue_comments`, and `activity_events`. The Phase 3 migration adds `datasets.processing_error`, creates the private `datasets` Storage bucket, and adds Storage policies tied to dataset rows and workspace membership. RLS is enabled on every application table. Membership checks use narrow `SECURITY DEFINER` helper functions with explicit `search_path = public` to avoid recursive policies on `workspace_members`.
 
 Workspace creation goes through `public.create_workspace(name, description)`, which validates the authenticated user, generates a unique slug, inserts the workspace, and inserts the creator as `owner` in a single transaction.
+
+Dataset files are stored under `workspace_id/dataset_id/original_filename`. Storage policies parse the path, verify the matching dataset row, and reuse workspace membership helpers. Viewers can read and download through signed URLs. Only owner, admin, and member roles can upload or modify dataset objects.
 
 ## Planned Realtime Usage
 
