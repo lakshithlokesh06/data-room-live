@@ -103,8 +103,8 @@ public/
 
 ## Development Roadmap
 
-1. Build workspace detail pages and role-aware member read surfaces.
-2. Add issue creation, assignment, status transitions, and comments.
+1. Build workspace detail pages and role-aware member read surfaces
+2. Add issue creation, assignment, status transitions, and comments
 3. Add Supabase Realtime subscriptions for activity and collaboration surfaces.
 4. Add invitations and role management surfaces.
 5. Add deeper test coverage, seed data, and deployment documentation.
