@@ -1,29 +1,47 @@
-export type WorkspaceRole = "owner" | "admin" | "reviewer" | "viewer";
+export const workspaceRoles = ["owner", "admin", "member", "viewer"] as const;
 
-export type DatasetStatus =
-  | "registered"
-  | "profiling"
-  | "reviewing"
-  | "approved"
-  | "archived";
+export type WorkspaceRole = (typeof workspaceRoles)[number];
 
-export type IssueSeverity = "low" | "medium" | "high" | "critical";
+export const datasetStatuses = [
+  "pending",
+  "processing",
+  "ready",
+  "failed",
+] as const;
 
-export type IssueStatus = "open" | "assigned" | "resolved" | "dismissed";
+export type DatasetStatus = (typeof datasetStatuses)[number];
 
-export type ActivityEventType =
-  | "workspace.created"
-  | "dataset.registered"
-  | "issue.opened"
-  | "issue.assigned"
-  | "issue.resolved"
-  | "comment.created";
+export const issueSeverities = ["low", "medium", "high", "critical"] as const;
+
+export type IssueSeverity = (typeof issueSeverities)[number];
+
+export const issueStatuses = [
+  "open",
+  "in_progress",
+  "resolved",
+  "dismissed",
+] as const;
+
+export type IssueStatus = (typeof issueStatuses)[number];
+
+export const activityEventTypes = [
+  "workspace.created",
+  "member.added",
+  "dataset.registered",
+  "issue.opened",
+  "issue.assigned",
+  "issue.resolved",
+  "comment.created",
+] as const;
+
+export type ActivityEventType = (typeof activityEventTypes)[number];
 
 export interface Workspace {
   id: string;
   name: string;
   slug: string;
-  description?: string;
+  description: string | null;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,7 +51,6 @@ export interface WorkspaceMember {
   workspaceId: string;
   userId: string;
   role: WorkspaceRole;
-  displayName?: string;
   joinedAt: string;
 }
 
@@ -41,11 +58,14 @@ export interface Dataset {
   id: string;
   workspaceId: string;
   name: string;
-  sourceType: "upload" | "database" | "warehouse" | "api";
+  description: string | null;
+  originalFilename: string | null;
+  storagePath: string | null;
+  fileSizeBytes: number | null;
   status: DatasetStatus;
-  rowCount?: number;
-  columnCount?: number;
-  createdBy: string;
+  rowCount: number | null;
+  columnCount: number | null;
+  uploadedBy: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,44 +74,47 @@ export interface DatasetColumn {
   id: string;
   datasetId: string;
   name: string;
-  dataType: string;
+  position: number;
+  detectedType: string | null;
   nullable: boolean;
-  distinctCount?: number;
-  missingCount?: number;
-  sampleValues?: string[];
+  missingCount: number | null;
+  uniqueCount: number | null;
+  createdAt: string;
 }
 
 export interface DataQualityIssue {
   id: string;
   workspaceId: string;
   datasetId: string;
-  columnId?: string;
+  columnId: string | null;
   title: string;
-  description?: string;
+  description: string | null;
+  issueType: string;
   severity: IssueSeverity;
   status: IssueStatus;
-  assigneeId?: string;
+  assignedTo: string | null;
   createdBy: string;
   createdAt: string;
-  resolvedAt?: string;
+  updatedAt: string;
+  resolvedAt: string | null;
 }
 
 export interface IssueComment {
   id: string;
   issueId: string;
   authorId: string;
-  body: string;
+  content: string;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
 }
 
 export interface ActivityEvent {
   id: string;
   workspaceId: string;
-  actorId: string;
-  type: ActivityEventType;
-  entityId: string;
-  entityType: "workspace" | "dataset" | "issue" | "comment";
-  summary: string;
+  actorId: string | null;
+  eventType: ActivityEventType | string;
+  entityType: "workspace" | "member" | "dataset" | "column" | "issue" | "comment";
+  entityId: string | null;
+  metadata: Record<string, unknown>;
   createdAt: string;
 }

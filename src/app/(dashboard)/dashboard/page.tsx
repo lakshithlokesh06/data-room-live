@@ -17,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getDisplayName } from "@/lib/auth/display";
+import { requireUser } from "@/lib/auth/session";
 
 const dashboardCards = [
   {
@@ -45,7 +47,9 @@ const dashboardCards = [
   },
 ];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await requireUser();
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -55,8 +59,9 @@ export default function DashboardPage() {
             Review operations
           </h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">
-            The first foundation pass keeps product surfaces present without
-            connecting database tables, uploads, auth flows, or realtime channels yet.
+            Signed in as {getDisplayName(user)}. Database and authentication
+            foundations are active, while uploads, profiling, issues, and realtime
+            collaboration remain intentionally out of scope for this phase.
           </p>
         </div>
         <div className="relative w-full lg:max-w-sm">

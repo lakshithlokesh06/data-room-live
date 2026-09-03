@@ -6,11 +6,16 @@ import {
   BarChart3,
   Database,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   Menu,
   UserRound,
   UsersRound,
 } from "lucide-react";
 
+import { signOutAction } from "@/app/(auth)/actions";
+import { getDisplayName, getInitials } from "@/lib/auth/display";
+import type { AuthenticatedUser } from "@/lib/auth/session";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,8 +47,14 @@ const navItems = [
   { href: "/activity", label: "Activity", icon: BarChart3 },
 ];
 
-export function SiteHeader() {
+type SiteHeaderProps = {
+  user: AuthenticatedUser | null;
+};
+
+export function SiteHeader({ user }: SiteHeaderProps) {
   const pathname = usePathname();
+  const displayName = user ? getDisplayName(user) : "Guest";
+  const initials = user ? getInitials(displayName) : "DR";
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -135,20 +146,48 @@ export function SiteHeader() {
                 aria-label="Open account menu"
               >
                 <Avatar className="size-7">
-                  <AvatarFallback>LL</AvatarFallback>
+                  <AvatarFallback>{initials}</AvatarFallback>
                 </Avatar>
                 <span className="hidden text-sm font-medium sm:inline">
-                  Account
+                  {user ? displayName : "Account"}
                 </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Auth placeholder</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <span className="block truncate">{displayName}</span>
+                {user?.email ? (
+                  <span className="block truncate text-xs font-normal text-muted-foreground">
+                    {user.email}
+                  </span>
+                ) : null}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>
-                <UserRound />
-                Supabase Auth planned
-              </DropdownMenuItem>
+              {user ? (
+                <form action={signOutAction}>
+                  <DropdownMenuItem asChild>
+                    <button className="w-full" type="submit">
+                      <LogOut />
+                      Sign out
+                    </button>
+                  </DropdownMenuItem>
+                </form>
+              ) : (
+                <>
+                  <DropdownMenuItem asChild>
+                    <Link href="/login">
+                      <LogIn />
+                      Sign in
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/signup">
+                      <UserRound />
+                      Create account
+                    </Link>
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

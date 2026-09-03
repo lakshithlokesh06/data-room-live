@@ -25,7 +25,7 @@ DataRoom Live is a production-quality portfolio project for a real-time collabor
 
 ## Current Project Status
 
-Phase 1 is complete: project foundation and architecture only. The app contains a polished static landing page, dashboard shell, placeholder navigation routes, foundational domain types, Supabase client utilities, environment examples, and architecture documentation. Authentication, database schema, uploads, issue workflows, and realtime subscriptions are intentionally not implemented yet.
+Phase 2 is complete: database foundation and authentication. The app now includes Supabase schema migrations, Row Level Security policies, SSR auth session refresh through Next.js Proxy, login/signup flows, protected dashboard routes, authenticated account display, and atomic workspace creation. Dataset uploads, profiling, issue-management UI, comments UI, and realtime collaboration are intentionally not implemented yet.
 
 ## Local Setup
 
@@ -45,12 +45,39 @@ Open `http://localhost:3000` after the dev server starts.
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. It must never be imported into client components or exposed to browser bundles.
 
+## Supabase Setup
+
+1. Create a Supabase project.
+2. Copy `.env.example` to `.env.local`.
+3. Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+4. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only and out of browser code.
+5. Apply migrations from `supabase/migrations/` using the Supabase CLI or Supabase SQL Editor.
+
+```bash
+supabase db push
+```
+
+If you are using the Supabase dashboard instead of the CLI, run the SQL in `supabase/migrations/202609030001_database_auth_foundation.sql`.
+
+## Authentication Configuration
+
+Set the site URL and redirect URLs in the Supabase Auth dashboard. For local development, include:
+
+```text
+http://localhost:3000
+http://localhost:3000/auth/callback
+```
+
+For production, add the production origin and `/auth/callback` URL for that origin.
+
 ## Folder Structure
 
 ```text
 src/
   app/
+    (auth)/
     (dashboard)/
+    auth/
     api/
     layout.tsx
     page.tsx
@@ -60,7 +87,10 @@ src/
     shared/
     ui/
   lib/
+    auth/
     supabase/
+    validation/
+    workspaces/
     utils.ts
   types/
 supabase/
@@ -71,11 +101,10 @@ public/
 
 ## Development Roadmap
 
-1. Add Supabase schema migrations for workspaces, members, datasets, columns, issues, comments, and activity events.
-2. Implement Supabase Auth, protected routes, and session refresh middleware.
-3. Build workspace and dataset CRUD workflows.
-4. Add dataset upload/registration and metadata inspection.
+1. Build workspace detail pages and role-aware member read surfaces.
+2. Add dataset registration metadata UI without file uploads.
+3. Add dataset upload, Supabase Storage buckets, and CSV parsing.
+4. Add dataset profiling and metadata inspection.
 5. Implement issue creation, assignment, status transitions, and comments.
 6. Add Supabase Realtime subscriptions for activity and collaboration surfaces.
-7. Harden authorization rules with Supabase Row Level Security policies.
-8. Add test coverage, seeded demos, and deployment documentation.
+7. Add deeper test coverage, seed data, and deployment documentation.
