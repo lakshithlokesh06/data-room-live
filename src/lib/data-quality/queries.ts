@@ -7,9 +7,15 @@ import {
   issueSeverities,
   type IssueSource,
   type IssueStatus,
+  type IssueType,
+  issueStatuses,
+  issueSources,
+  manualIssueTypes,
+  type WorkspaceRole,
 } from "@/types";
 import { getSupabaseConfig } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/session";
 
 const severityRank: Record<IssueSeverity, number> = {
   low: 1,
@@ -25,7 +31,7 @@ type IssueRow = {
   column_id: string | null;
   title: string;
   description: string | null;
-  issue_type: DataQualityIssueType;
+  issue_type: IssueType;
   severity: IssueSeverity;
   status: IssueStatus;
   assigned_to: string | null;
@@ -36,6 +42,8 @@ type IssueRow = {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
 };
 
 type DatasetRow = {
@@ -58,13 +66,17 @@ type ColumnRow = {
 
 export type QualityIssueFilters = {
   severity?: IssueSeverity;
-  issueType?: DataQualityIssueType;
+  issueType?: IssueType;
+  status?: IssueStatus;
 };
 
 export type QualityIssueListItem = ReturnType<typeof mapIssueRow> & {
   datasetName: string;
   workspaceName: string;
   columnName: string | null;
+  assigneeName: string | null;
+  creatorName: string | null;
+  resolverName: string | null;
 };
 
 export type DatasetIssueSignal = {
@@ -74,6 +86,9 @@ export type DatasetIssueSignal = {
 
 export type DashboardQualitySummary = {
   openIssueCount: number;
+  inProgressIssueCount: number;
+  resolvedIssueCount: number;
+  assignedToMeCount: number;
   criticalHighIssueCount: number;
   datasetsWithIssues: {
     datasetId: string;
@@ -94,12 +109,8 @@ export async function listDatasetQualityIssues(
   const supabase = await createClient();
   let query = supabase
     .from("data_quality_issues")
-    .select(
-      "id, workspace_id, dataset_id, column_id, title, description, issue_type, severity, status, assigned_to, created_by, source, detection_metadata, automated_issue_key, created_at, updated_at, resolved_at"
-    )
-    .eq("dataset_id", datasetId)
-    .eq("source", "automated")
-    .eq("status", "open");
+    .select(issueSelect)
+    .eq("dataset_id", datasetId);
 
   if (filters.severity) {
     query = query.eq("severity", filters.severity);
@@ -108,6 +119,7 @@ export async function listDatasetQualityIssues(
   if (filters.issueType) {
     query = query.eq("issue_type", filters.issueType);
   }
+  if (filters.status) query = query.eq("status", filters.status);
 
   const { data, error } = await query.order("created_at", {
     ascending: false,
@@ -130,9 +142,7 @@ export async function getIssueDetail(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("data_quality_issues")
-    .select(
-      "id, workspace_id, dataset_id, column_id, title, description, issue_type, severity, status, assigned_to, created_by, source, detection_metadata, automated_issue_key, created_at, updated_at, resolved_at"
-    )
+    .select(issueSelect)
     .eq("id", issueId)
     .maybeSingle<IssueRow>();
 
@@ -143,6 +153,87 @@ export async function getIssueDetail(
   const [issue] = await hydrateIssues([data]);
   return issue ?? null;
 }
+
+export async function listAccessibleIssues(filters: {
+  workspace?: string; dataset?: string; severity?: string; status?: string;
+  source?: string; assignedTo?: string; search?: string;
+}, userId: string, page = 1): Promise<{ issues: QualityIssueListItem[]; hasMore: boolean }> {
+  if (!getSupabaseConfig()) return { issues: [], hasMore: false };
+  const supabase = await createClient();
+  let query = supabase.from("data_quality_issues").select(issueSelect);
+  if (filters.workspace) query = query.eq("workspace_id", filters.workspace);
+  if (filters.dataset) query = query.eq("dataset_id", filters.dataset);
+  if (issueSeverities.includes(filters.severity as IssueSeverity)) query = query.eq("severity", filters.severity!);
+  if (issueStatuses.includes(filters.status as IssueStatus)) query = query.eq("status", filters.status!);
+  if (issueSources.includes(filters.source as IssueSource)) query = query.eq("source", filters.source!);
+  if (filters.assignedTo === "me") query = query.eq("assigned_to", userId);
+  const search = filters.search?.trim().slice(0, 100).replace(/[^a-zA-Z0-9 _-]/g, "");
+  if (search) {
+    const { data: matchingDatasets } = await supabase.from("datasets").select("id")
+      .ilike("name", `%${search}%`).limit(1000);
+    const ids = (matchingDatasets ?? []).map((dataset) => dataset.id);
+    query = ids.length
+      ? query.or(`title.ilike.%${search}%,dataset_id.in.(${ids.join(",")})`)
+      : query.ilike("title", `%${search}%`);
+  }
+  const { data } = await query.order("created_at", { ascending: false })
+    .range((page - 1) * 50, page * 50);
+  const rows = (data ?? []) as IssueRow[];
+  return { issues: await hydrateIssues(rows.slice(0, 50)), hasMore: rows.length > 50 };
+}
+
+export async function listAccessibleIssueDatasets() {
+  if (!getSupabaseConfig()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase.from("datasets").select("id, name").order("name");
+  return (data ?? []) as { id: string; name: string }[];
+}
+
+export async function listWorkspaceMembers(workspaceId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("workspace_members").select("user_id, role")
+    .eq("workspace_id", workspaceId);
+  const members = (data ?? []) as { user_id: string; role: WorkspaceRole }[];
+  const names = await getProfiles(members.map((member) => member.user_id));
+  return members.map((member) => ({ id: member.user_id, role: member.role,
+    name: names.get(member.user_id) ?? "Workspace member" }));
+}
+
+export async function getCurrentWorkspaceRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("workspace_members").select("role")
+    .eq("workspace_id", workspaceId).eq("user_id", userId).maybeSingle<{ role: WorkspaceRole }>();
+  return data?.role ?? null;
+}
+
+export async function listIssueComments(issueId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("issue_comments")
+    .select("id, author_id, content, created_at, updated_at")
+    .eq("issue_id", issueId).order("created_at", { ascending: true });
+  const rows = (data ?? []) as { id: string; author_id: string; content: string; created_at: string; updated_at: string }[];
+  const names = await getProfiles(rows.map((row) => row.author_id));
+  return rows.map((row) => ({ id: row.id, authorId: row.author_id,
+    authorName: names.get(row.author_id) ?? "Former member", content: row.content,
+    createdAt: row.created_at, updatedAt: row.updated_at }));
+}
+
+export async function listActivityEvents(issueId?: string, limit = 100, offset = 0) {
+  if (!getSupabaseConfig()) return [];
+  const supabase = await createClient();
+  let query = supabase.from("activity_events")
+    .select("id, workspace_id, actor_id, event_type, entity_type, entity_id, metadata, created_at")
+    .order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+  if (issueId) query = query.eq("entity_type", "issue").eq("entity_id", issueId);
+  const { data } = await query;
+  const rows = (data ?? []) as { id: string; workspace_id: string; actor_id: string | null;
+    event_type: string; entity_type: string; entity_id: string | null;
+    metadata: Record<string, unknown>; created_at: string }[];
+  const names = await getProfiles(rows.flatMap((row) => row.actor_id ? [row.actor_id] : []));
+  return rows.map((row) => ({ ...row, actorName: row.actor_id ? names.get(row.actor_id) ?? "Former member" : "System" }));
+}
+
+const issueSelect = "id, workspace_id, dataset_id, column_id, title, description, issue_type, severity, status, assigned_to, created_by, source, detection_metadata, automated_issue_key, created_at, updated_at, resolved_at, resolved_by, resolution_note";
 
 export async function getDatasetIssueSignals(datasetIds: string[]) {
   const signals = new Map<string, DatasetIssueSignal>();
@@ -157,7 +248,7 @@ export async function getDatasetIssueSignals(datasetIds: string[]) {
     .from("data_quality_issues")
     .select("dataset_id, severity")
     .in("dataset_id", ids)
-    .eq("status", "open");
+    .in("status", ["open", "in_progress"]);
 
   if (error || !data) {
     return signals;
@@ -184,8 +275,12 @@ export async function getDatasetIssueSignals(datasetIds: string[]) {
 }
 
 export async function getDashboardQualitySummary(): Promise<DashboardQualitySummary> {
+  const currentUserId = (await getCurrentUser())?.id ?? null;
   const emptySummary: DashboardQualitySummary = {
     openIssueCount: 0,
+    inProgressIssueCount: 0,
+    resolvedIssueCount: 0,
+    assignedToMeCount: 0,
     criticalHighIssueCount: 0,
     datasetsWithIssues: [],
   };
@@ -197,22 +292,22 @@ export async function getDashboardQualitySummary(): Promise<DashboardQualitySumm
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("data_quality_issues")
-    .select("dataset_id, severity")
-    .eq("status", "open");
+    .select("dataset_id, severity, status, assigned_to");
 
   if (error || !data) {
     return emptySummary;
   }
 
-  const issues = data as Pick<IssueRow, "dataset_id" | "severity">[];
-  const datasetIds = unique(issues.map((issue) => issue.dataset_id));
+  const issues = data as Pick<IssueRow, "dataset_id" | "severity" | "status" | "assigned_to">[];
+  const active = issues.filter((issue) => issue.status === "open" || issue.status === "in_progress");
+  const datasetIds = unique(active.map((issue) => issue.dataset_id));
   const datasets = await getDatasets(datasetIds);
   const grouped = new Map<
     string,
     { issueCount: number; highestSeverity: IssueSeverity }
   >();
 
-  for (const issue of issues) {
+  for (const issue of active) {
     const current = grouped.get(issue.dataset_id);
 
     if (!current) {
@@ -233,8 +328,11 @@ export async function getDashboardQualitySummary(): Promise<DashboardQualitySumm
   }
 
   return {
-    openIssueCount: issues.length,
-    criticalHighIssueCount: issues.filter(
+    openIssueCount: issues.filter((issue) => issue.status === "open").length,
+    inProgressIssueCount: issues.filter((issue) => issue.status === "in_progress").length,
+    resolvedIssueCount: issues.filter((issue) => issue.status === "resolved").length,
+    assignedToMeCount: issues.filter((issue) => issue.assigned_to === currentUserId).length,
+    criticalHighIssueCount: active.filter(
       (issue) => issue.severity === "critical" || issue.severity === "high"
     ).length,
     datasetsWithIssues: Array.from(grouped.entries())
@@ -260,21 +358,25 @@ export async function getDashboardQualitySummary(): Promise<DashboardQualitySumm
 export function parseQualityIssueFilters(searchParams: {
   severity?: string | string[];
   issueType?: string | string[];
+  status?: string | string[];
 }): QualityIssueFilters {
   const severity = firstValue(searchParams.severity);
   const issueType = firstValue(searchParams.issueType);
+  const status = firstValue(searchParams.status);
 
   return {
     severity: isIssueSeverity(severity) ? severity : undefined,
     issueType: isDataQualityIssueType(issueType) ? issueType : undefined,
+    status: issueStatuses.includes(status as IssueStatus) ? status as IssueStatus : undefined,
   };
 }
 
 async function hydrateIssues(rows: IssueRow[]): Promise<QualityIssueListItem[]> {
-  const [datasets, workspaces, columns] = await Promise.all([
+  const [datasets, workspaces, columns, profiles] = await Promise.all([
     getDatasets(rows.map((row) => row.dataset_id)),
     getWorkspaces(rows.map((row) => row.workspace_id)),
     getColumns(rows.flatMap((row) => (row.column_id ? [row.column_id] : []))),
+    getProfiles(rows.flatMap((row) => [row.created_by, row.assigned_to, row.resolved_by].filter((id): id is string => Boolean(id)))),
   ]);
 
   return rows.map((row) => {
@@ -287,8 +389,23 @@ async function hydrateIssues(rows: IssueRow[]): Promise<QualityIssueListItem[]> 
       datasetName: dataset?.name ?? "Unknown dataset",
       workspaceName: workspace?.name ?? "Unknown workspace",
       columnName: column?.name ?? null,
+      assigneeName: row.assigned_to ? profiles.get(row.assigned_to) ?? "Former member" : null,
+      creatorName: profiles.get(row.created_by) ?? "Former member",
+      resolverName: row.resolved_by ? profiles.get(row.resolved_by) ?? "Former member" : null,
     };
   });
+}
+
+async function getProfiles(userIds: string[]) {
+  const names = new Map<string, string>();
+  const ids = unique(userIds);
+  if (ids.length === 0) return names;
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+  for (const profile of (data ?? []) as { id: string; full_name: string | null }[]) {
+    names.set(profile.id, profile.full_name?.trim() || "Workspace member");
+  }
+  return names;
 }
 
 async function getDatasets(datasetIds: string[]) {
@@ -373,6 +490,8 @@ function mapIssueRow(row: IssueRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
+    resolvedBy: row.resolved_by,
+    resolutionNote: row.resolution_note,
   };
 }
 
@@ -388,8 +507,6 @@ function isIssueSeverity(value: string | undefined): value is IssueSeverity {
   return issueSeverities.includes(value as IssueSeverity);
 }
 
-function isDataQualityIssueType(
-  value: string | undefined
-): value is DataQualityIssueType {
-  return dataQualityIssueTypes.includes(value as DataQualityIssueType);
+function isDataQualityIssueType(value: string | undefined): value is IssueType {
+  return dataQualityIssueTypes.includes(value as DataQualityIssueType) || manualIssueTypes.includes(value as (typeof manualIssueTypes)[number]);
 }

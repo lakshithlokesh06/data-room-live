@@ -23,9 +23,14 @@ import {
   type QualityIssueListItem,
 } from "@/lib/data-quality/queries";
 import { getDatasetDetail } from "@/lib/datasets/queries";
+import { requireUser } from "@/lib/auth/session";
+import { getCurrentWorkspaceRole } from "@/lib/data-quality/queries";
+import { canWriteIssues } from "@/lib/issues/workflow";
 import { formatBytes } from "@/lib/datasets/validation";
 import {
   dataQualityIssueTypes,
+  manualIssueTypes,
+  issueStatuses,
   issueSeverities,
   type DataQualityIssueType,
   type IssueSeverity,
@@ -39,6 +44,7 @@ export default async function DatasetDetailPage({
   searchParams: Promise<{
     severity?: string | string[];
     issueType?: string | string[];
+    status?: string | string[];
   }>;
 }) {
   const { datasetId } = await params;
@@ -49,6 +55,8 @@ export default async function DatasetDetailPage({
     notFound();
   }
 
+  const user = await requireUser();
+  const role = await getCurrentWorkspaceRole(dataset.workspaceId, user.id);
   const allQualityIssues = await listDatasetQualityIssues(datasetId);
   const filteredQualityIssues = filterQualityIssues(allQualityIssues, filters);
   const severityCounts = countBySeverity(allQualityIssues);
@@ -106,13 +114,10 @@ export default async function DatasetDetailPage({
       <Card>
         <CardHeader>
           <CardTitle>Data Quality</CardTitle>
-          <CardDescription>
-            Automatically generated findings from the CSV profiling pass.
-          </CardDescription>
+          <CardDescription>Automated findings and manual reviews for this dataset.</CardDescription>
           <CardAction>
-            <span className="text-sm text-muted-foreground">
-              {allQualityIssues.length.toLocaleString()} open
-            </span>
+            <div className="flex items-center gap-3"><span className="text-sm text-muted-foreground">{allQualityIssues.length.toLocaleString()} total</span>
+              {canWriteIssues(role) && <Button asChild size="sm"><Link href={`/datasets/${dataset.id}/issues/new`}>Create issue</Link></Button>}</div>
           </CardAction>
         </CardHeader>
         <CardContent className="grid gap-5">
@@ -131,7 +136,7 @@ export default async function DatasetDetailPage({
 
           <div className="flex flex-wrap gap-2">
             <FilterLink
-              active={!filters.severity && !filters.issueType}
+              active={!filters.severity && !filters.issueType && !filters.status}
               datasetId={dataset.id}
               label="All"
             />
@@ -144,7 +149,10 @@ export default async function DatasetDetailPage({
                 severity={severity}
               />
             ))}
-            {dataQualityIssueTypes.map((issueType) => (
+            {issueStatuses.map((status) => (
+              <FilterLink active={filters.status === status} datasetId={dataset.id} key={status} label={status.replaceAll("_", " ")} status={status} />
+            ))}
+            {[...dataQualityIssueTypes, ...manualIssueTypes].map((issueType) => (
               <FilterLink
                 active={filters.issueType === issueType}
                 datasetId={dataset.id}
@@ -165,6 +173,7 @@ export default async function DatasetDetailPage({
                     <th className="py-3 pr-4 font-medium">Column</th>
                     <th className="py-3 pr-4 font-medium">Severity</th>
                     <th className="py-3 pr-4 font-medium">Status</th>
+                    <th className="py-3 pr-4 font-medium">Assignee</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -193,6 +202,7 @@ export default async function DatasetDetailPage({
                       <td className="py-3 pr-4 align-top">
                         <IssueStatusBadge status={issue.status} />
                       </td>
+                      <td className="py-3 pr-4 align-top">{issue.assigneeName ?? "Unassigned"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -200,7 +210,7 @@ export default async function DatasetDetailPage({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No open automated issues match the current filters.
+              No issues match the current filters.
             </p>
           )}
         </CardContent>
@@ -270,12 +280,14 @@ function FilterLink({
   label,
   severity,
   issueType,
+  status,
 }: {
   active: boolean;
   datasetId: string;
   label: string;
   severity?: IssueSeverity;
-  issueType?: DataQualityIssueType;
+  issueType?: DataQualityIssueType | (typeof manualIssueTypes)[number];
+  status?: (typeof issueStatuses)[number];
 }) {
   const params = new URLSearchParams();
 
@@ -286,6 +298,7 @@ function FilterLink({
   if (issueType) {
     params.set("issueType", issueType);
   }
+  if (status) params.set("status", status);
 
   const query = params.toString();
 
@@ -302,13 +315,15 @@ function filterQualityIssues(
   issues: QualityIssueListItem[],
   filters: {
     severity?: IssueSeverity;
-    issueType?: DataQualityIssueType;
+    issueType?: DataQualityIssueType | (typeof manualIssueTypes)[number];
+    status?: (typeof issueStatuses)[number];
   }
 ) {
   return issues.filter(
     (issue) =>
       (!filters.severity || issue.severity === filters.severity) &&
-      (!filters.issueType || issue.issueType === filters.issueType)
+      (!filters.issueType || issue.issueType === filters.issueType) &&
+      (!filters.status || issue.status === filters.status)
   );
 }
 

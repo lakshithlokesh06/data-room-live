@@ -149,13 +149,13 @@ function QualitySignal({
   highestSeverity: Parameters<typeof SeverityBadge>[0]["severity"] | null;
 }) {
   if (issueCount === 0 || !highestSeverity) {
-    return <span className="text-muted-foreground">No open issues</span>;
+    return <span className="text-muted-foreground">No unresolved issues</span>;
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <SeverityBadge severity={highestSeverity} />
-      <span>{issueCount.toLocaleString()} open</span>
+      <span>{issueCount.toLocaleString()} unresolved</span>
     </div>
   );
 }

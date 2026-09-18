@@ -56,6 +56,12 @@ export const dataQualityIssueTypes = [
 
 export type DataQualityIssueType = (typeof dataQualityIssueTypes)[number];
 
+export const manualIssueTypes = [
+  "manual_review", "data_accuracy", "formatting", "schema", "other",
+] as const;
+export type ManualIssueType = (typeof manualIssueTypes)[number];
+export type IssueType = DataQualityIssueType | ManualIssueType;
+
 export const issueSources = ["manual", "automated"] as const;
 
 export type IssueSource = (typeof issueSources)[number];
@@ -114,7 +120,7 @@ export interface DataQualityIssue {
   columnId: string | null;
   title: string;
   description: string | null;
-  issueType: string;
+  issueType: IssueType;
   severity: IssueSeverity;
   status: IssueStatus;
   assignedTo: string | null;
@@ -125,6 +131,8 @@ export interface DataQualityIssue {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
 }
 
 export interface IssueComment {

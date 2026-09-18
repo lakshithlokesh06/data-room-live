@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Database,
+  ListChecks,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -44,6 +45,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workspaces", label: "Workspaces", icon: UsersRound },
   { href: "/datasets", label: "Datasets", icon: Database },
+  { href: "/issues", label: "Issues", icon: ListChecks },
   { href: "/activity", label: "Activity", icon: BarChart3 },
 ];
 
@@ -131,11 +133,11 @@ export function SiteHeader({ user }: SiteHeaderProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="hidden sm:inline-flex">
-                <Badge variant="outline">Foundation</Badge>
+                <Badge variant="outline">Workspace</Badge>
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              Authentication arrives in a later phase
+              Collaborative dataset review
             </TooltipContent>
           </Tooltip>
           <DropdownMenu>

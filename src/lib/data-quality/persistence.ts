@@ -54,22 +54,21 @@ export async function analyzeAndPersistAutomatedIssues({
       automated_issue_key: issue.fingerprint,
     }));
 
-    const { error: deleteError } = await supabase
+    const { data: existing, error: readError } = await supabase
       .from("data_quality_issues")
-      .delete()
-      .eq("dataset_id", datasetId)
-      .eq("source", "automated");
-
-    if (deleteError) {
-      throw new Error(deleteError.message);
-    }
-
-    if (rows.length > 0) {
-      const { error: insertError } = await supabase
-        .from("data_quality_issues")
-        .insert(rows);
-
-      if (insertError) {
+      .select("automated_issue_key")
+      .eq("dataset_id", datasetId).eq("source", "automated");
+    if (readError) throw new Error(readError.message);
+    const keys = new Set((existing ?? []).map((row) => row.automated_issue_key));
+    const fresh = rows.filter((row) => !keys.has(row.automated_issue_key));
+    if (fresh.length > 0) {
+      const { error: insertError } = await supabase.from("data_quality_issues").insert(fresh);
+      if (insertError?.code === "23505") {
+        for (const row of fresh) {
+          const { error } = await supabase.from("data_quality_issues").insert(row);
+          if (error && error.code !== "23505") throw new Error(error.message);
+        }
+      } else if (insertError) {
         throw new Error(insertError.message);
       }
     }

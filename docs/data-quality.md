@@ -70,7 +70,7 @@ Automated metadata stores counts, percentages, method names, and column referenc
 
 ## Idempotency
 
-Automated issue persistence clears and recreates only `source = 'automated'` issues for the processed dataset. Manual issues are never deleted by reprocessing. `automated_issue_key` is also indexed to guard against duplicate automated findings.
+Automated issue persistence retains existing findings by deterministic key and inserts only new keys. Review state and comments therefore survive a repeated analysis. Manual issues are untouched. A unique automated key index guards against duplicate findings.
 
 ## Failure Isolation
 
@@ -78,7 +78,7 @@ Parsing and profiling success is not lost if quality detection or persistence fa
 
 ## Authorization
 
-All workspace members, including viewers, may read quality issues through existing RLS. Direct client inserts and updates are restricted to `source = 'manual'`, so clients cannot forge automated issues. Automated issue creation uses the server-only Supabase service-role client after the upload flow has already validated the authenticated user can write to the dataset workspace.
+All workspace members, including viewers, may read quality issues through RLS. Phase 5 removes direct client writes to issues and comments. Validated server actions handle manual review, while automated issue creation uses the server-only service-role client after upload authorization.
 
 ## Performance Notes
 

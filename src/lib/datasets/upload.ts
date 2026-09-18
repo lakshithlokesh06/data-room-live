@@ -12,6 +12,7 @@ import {
 } from "@/lib/datasets/validation";
 import { getSupabaseConfig } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/admin";
 import type { WorkspaceRole } from "@/types";
 
 type DatasetInsertRow = {
@@ -276,10 +277,18 @@ async function recordDatasetActivity(
   metadata: Record<string, unknown>
 ) {
   const supabase = await createClient();
-
-  await supabase.rpc("record_dataset_activity", {
-    target_dataset_id: datasetId,
-    target_event_type: eventType,
-    event_metadata: metadata,
-  });
+  const user = await requireUser();
+  const { data: dataset } = await supabase.from("datasets")
+    .select("workspace_id, uploaded_by").eq("id", datasetId)
+    .maybeSingle<{ workspace_id: string; uploaded_by: string }>();
+  if (!dataset || dataset.uploaded_by !== user.id ||
+    !(await getUploadMembership(dataset.workspace_id, user.id)).ok) return;
+  try {
+    await createServiceRoleClient().from("activity_events").insert({
+      workspace_id: dataset.workspace_id, actor_id: user.id, event_type: eventType,
+      entity_type: "dataset", entity_id: datasetId, metadata,
+    });
+  } catch {
+    // Dataset processing remains independent of activity persistence.
+  }
 }

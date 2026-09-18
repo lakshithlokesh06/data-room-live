@@ -15,6 +15,8 @@ The initial route structure is intentionally small:
 - `/datasets/new` uploads CSV files for owner, admin, and member roles.
 - `/datasets/[datasetId]` shows dataset metadata and stored column profiling.
 - `/datasets/[datasetId]/download` checks membership and redirects to a short-lived signed Storage URL.
+- `/issues` lists accessible issues with URL filters; `/issues/[issueId]` hosts review, comments, and history.
+- `/datasets/[datasetId]/issues/new` creates a manual issue for authorized workspace editors.
 
 Reusable UI is split into `src/components/ui` for shadcn primitives, `src/components/layout` for app chrome, `src/components/auth` for auth forms, `src/components/workspaces` for workspace-specific UI, `src/components/datasets` for dataset-specific upload and status components, and `src/components/shared` for reusable product building blocks.
 
@@ -27,6 +29,8 @@ API work uses Next.js Route Handlers under `src/app/api`, `src/app/auth`, and pr
 Dataset upload logic lives in server-only modules under `src/lib/datasets`. `validation.ts` centralizes file size, extension, and MIME checks. `csv-parser.ts` uses `csv-parse` rather than string splitting. `profiler.ts` infers deterministic column metadata without storing raw rows. `upload.ts` owns the mutation flow from pending dataset creation through private Storage upload, CSV parsing, `dataset_columns` inserts, ready or failed status updates, automatic quality analysis, and activity event recording.
 
 Automatic data-quality detection lives under `src/lib/data-quality`. Detectors are deterministic, independently testable modules. The engine runs them over the parsed rows and profile output, isolates detector failures, and persists compact automated issues through a server-only privileged client.
+
+Issue mutations live in `src/lib/issues/mutations.ts`. Server Actions validate authenticated membership and role, then make narrow service-role writes with optimistic concurrency checks. Authenticated table access remains RLS-scoped and read-only for issues and comments.
 
 The current implementation buffers CSV files server-side, capped at 20 MB. That keeps parsing, profiling, and quality detection simple while avoiding browser-side parsing and raw row persistence.
 
@@ -48,7 +52,7 @@ Protected pages also call `requireUser()` from `src/lib/auth/session.ts`, so Pro
 
 ## Database Architecture
 
-The Phase 2 migration creates `profiles`, `workspaces`, `workspace_members`, `datasets`, `dataset_columns`, `data_quality_issues`, `issue_comments`, and `activity_events`. The Phase 3 migration adds `datasets.processing_error`, creates the private `datasets` Storage bucket, and adds Storage policies tied to dataset rows and workspace membership. The Phase 4 migration adds automated issue source, metadata, keys, issue-type constraints, and direct-client protections for automated issues. RLS is enabled on every application table. Membership checks use narrow `SECURITY DEFINER` helper functions with explicit `search_path = public` to avoid recursive policies on `workspace_members`.
+The Phase 2 migration creates the core tables. Phase 3 adds dataset processing and private Storage, Phase 4 adds automated issue provenance, and Phase 5 adds resolution attribution, notes, manual types, and read-only client grants for issue workflow tables. RLS is enabled on every application table. Membership checks use narrow `SECURITY DEFINER` helpers with explicit `search_path = public` to avoid recursive policies.
 
 Workspace creation goes through `public.create_workspace(name, description)`, which validates the authenticated user, generates a unique slug, inserts the workspace, and inserts the creator as `owner` in a single transaction.
 

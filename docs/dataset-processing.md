@@ -59,6 +59,6 @@ Storage RLS does not trust filenames alone. Policies parse the object path, veri
 
 ## Quality Analysis
 
-The quality engine parses once, profiles once, then runs deterministic detectors over shared data. Automated issues include source, issue type, severity, status, optional column link, and compact detection metadata. Manual issues are never deleted by automated reprocessing.
+The quality engine parses once, profiles once, then runs deterministic detectors over shared data. Automated issues include source, issue type, severity, status, optional column link, and compact detection metadata. Automated reruns preserve existing issue identities and review state; manual issues are untouched. Dataset details now link to manual issue creation and review.
 
 See `docs/data-quality.md` for detector thresholds, severity rules, and limitations.
