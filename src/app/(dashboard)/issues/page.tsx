@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { listAccessibleIssues, listAccessibleIssueDatasets } from "@/lib/data-quality/queries";
 import { listCurrentUserWorkspaces } from "@/lib/workspaces/queries";
 import { issueSeverities, issueSources, issueStatuses } from "@/types";
+import { RealtimeRefresh } from "@/components/realtime/realtime-refresh";
 
 type Params = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
@@ -19,6 +20,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const datasets = availableDatasets.map((dataset): [string, string] => [dataset.id, dataset.name]);
   const pageHref = (next: number) => `/issues?${new URLSearchParams({ ...filters, page: String(next) })}`;
   return <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <RealtimeRefresh scope={{ workspaceIds: workspaces.map((workspace) => workspace.id), watchIssues: true }} />
     <div><h1 className="text-3xl font-semibold">Issues</h1><p className="text-sm text-muted-foreground">Review findings across your workspaces.</p></div>
     <form className="flex flex-wrap items-end gap-2" method="get">
       <label className="grid gap-1 text-xs">Search<input className="h-9 rounded border bg-background px-2 text-sm" name="search" placeholder="Issue or dataset" defaultValue={filters.search ?? ""} /></label>

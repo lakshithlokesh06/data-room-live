@@ -60,7 +60,7 @@ Dataset files are stored under `workspace_id/dataset_id/original_filename`. Stor
 
 ## Planned Realtime Usage
 
-Realtime subscriptions should be added after the database model exists. Expected channels include workspace activity, issue comments, issue status changes, and dataset review updates. Client subscriptions should be scoped to the active workspace and cleaned up when users leave a page or switch workspaces.
+Phase 6 uses workspace-, dataset-, and issue-scoped Postgres Changes subscriptions to refresh server-rendered review data. Private workspace Presence channels use `realtime.messages` policies tied to membership. Client components own subscription cleanup and reconnect handling. See `docs/realtime.md`.
 
 ## Planned Data Model
 

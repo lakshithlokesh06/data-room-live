@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/auth/session";
 import { getIssueDetail, getCurrentWorkspaceRole, listWorkspaceMembers, listIssueComments, listActivityEvents } from "@/lib/data-quality/queries";
 import { describeActivity } from "@/lib/issues/activity";
 import { canModifyComment, canWriteIssues } from "@/lib/issues/workflow";
+import { RealtimeRefresh } from "@/components/realtime/realtime-refresh";
+import { WorkspacePresence } from "@/components/realtime/workspace-presence";
 
 const date = (value: string) => new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 
@@ -19,10 +21,13 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ is
     listIssueComments(issue.id), listActivityEvents(issue.id),
   ]);
   return <main className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <RealtimeRefresh scope={{ issueId: issue.id }} showStatus />
     <Link href="/issues" className="text-sm text-muted-foreground hover:underline">Back to issues</Link>
     <header className="grid gap-2"><div className="flex flex-wrap items-center gap-2">
       <h1 className="text-3xl font-semibold">{issue.title}</h1><SeverityBadge severity={issue.severity} /><IssueStatusBadge status={issue.status} />
-    </div><p className="whitespace-pre-wrap text-muted-foreground">{issue.description || "No description provided."}</p></header>
+    </div><p className="whitespace-pre-wrap text-muted-foreground">{issue.description || "No description provided."}</p>
+    <WorkspacePresence workspaceId={issue.workspaceId} userId={user.id} displayName={user.fullName?.trim() || "Workspace member"} issueId={issue.id} />
+    </header>
     <section className="grid gap-4 border-y py-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
       <Info label="Dataset"><Link className="hover:underline" href={`/datasets/${issue.datasetId}`}>{issue.datasetName}</Link></Info>
       <Info label="Workspace">{issue.workspaceName}</Info><Info label="Column">{issue.columnName ?? "Dataset-level"}</Info>

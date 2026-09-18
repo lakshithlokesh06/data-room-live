@@ -21,11 +21,14 @@ import { getDashboardQualitySummary } from "@/lib/data-quality/queries";
 import { requireUser } from "@/lib/auth/session";
 import { listActivityEvents } from "@/lib/data-quality/queries";
 import { describeActivity } from "@/lib/issues/activity";
+import { listCurrentUserWorkspaces } from "@/lib/workspaces/queries";
+import { RealtimeRefresh } from "@/components/realtime/realtime-refresh";
 
 export default async function DashboardPage() {
   const user = await requireUser();
   const qualitySummary = await getDashboardQualitySummary();
   const recentEvents = await listActivityEvents(undefined, 5);
+  const workspaces = await listCurrentUserWorkspaces();
   const dashboardCards = [
     {
       title: "Workspaces",
@@ -55,6 +58,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+      <RealtimeRefresh scope={{ workspaceIds: workspaces.map((workspace) => workspace.id), watchIssues: true, watchActivity: true }} />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <Badge variant="secondary">Workspace overview</Badge>

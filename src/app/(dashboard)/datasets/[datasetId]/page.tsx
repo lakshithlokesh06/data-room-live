@@ -27,6 +27,8 @@ import { requireUser } from "@/lib/auth/session";
 import { getCurrentWorkspaceRole } from "@/lib/data-quality/queries";
 import { canWriteIssues } from "@/lib/issues/workflow";
 import { formatBytes } from "@/lib/datasets/validation";
+import { RealtimeRefresh } from "@/components/realtime/realtime-refresh";
+import { WorkspacePresence } from "@/components/realtime/workspace-presence";
 import {
   dataQualityIssueTypes,
   manualIssueTypes,
@@ -63,6 +65,7 @@ export default async function DatasetDetailPage({
 
   return (
     <main className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <RealtimeRefresh scope={{ datasetId: dataset.id }} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -74,6 +77,7 @@ export default async function DatasetDetailPage({
           <p className="max-w-3xl text-muted-foreground">
             {dataset.description || "No description provided."}
           </p>
+          <WorkspacePresence workspaceId={dataset.workspaceId} userId={user.id} displayName={user.fullName?.trim() || "Workspace member"} />
         </div>
         {dataset.storagePath ? (
           <Button asChild variant="outline">
