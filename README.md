@@ -2,9 +2,9 @@
 
 **Real-Time Collaborative Dataset Review Workspace**
 
-DataRoom Live is a modern collaborative data-quality review platform designed for data teams to securely upload datasets, automatically profile their structure, detect potential data-quality problems, and review findings within shared workspaces.
+DataRoom Live is a modern collaborative data-quality review platform designed for data teams to securely upload datasets, automatically profile their structure, detect potential data-quality problems, and collaboratively review findings within shared workspaces.
 
-The platform combines secure workspace-based access control, CSV profiling, deterministic data-quality detection, and structured issue tracking to provide a foundation for collaborative dataset review.
+The platform combines secure workspace-based access control, CSV profiling, deterministic data-quality detection, structured issue tracking, assignments, comments, resolution workflows, and activity history to provide an end-to-end dataset review environment.
 
 > Collaborative data quality review for modern data teams.
 
@@ -12,7 +12,7 @@ The platform combines secure workspace-based access control, CSV profiling, dete
 
 ## Overview
 
-Data quality problems such as missing values, duplicate records, inconsistent formats, suspicious outliers, and malformed columns can significantly affect downstream analytics and machine learning workflows.
+Data quality problems such as missing values, duplicate records, inconsistent formats, suspicious outliers, malformed columns, and schema inconsistencies can significantly affect downstream analytics and machine learning workflows.
 
 DataRoom Live provides a centralized workspace where teams can:
 
@@ -21,17 +21,23 @@ DataRoom Live provides a centralized workspace where teams can:
 - Automatically profile dataset structure
 - Inspect column-level statistics
 - Detect potential data-quality problems
-- Review automatically generated quality issues
-- Monitor dataset and issue activity
+- Create manual review issues
+- Review automated findings
+- Assign issues to workspace members
+- Track issue status
+- Resolve, dismiss, and reopen findings
+- Discuss issues through comments
+- Review issue activity history
+- Monitor workspace and dataset activity
 - Securely access datasets based on workspace roles
 
-Data-quality findings are designed as **review signals rather than definitive claims that data is incorrect**.
+Automated data-quality findings are designed as **review signals rather than definitive claims that data is incorrect**.
 
 ---
 
-## Core Features
+# Core Features
 
-### Authentication & Security
+## Authentication & Security
 
 - Email/password authentication using Supabase Auth
 - Server-side session handling with Supabase SSR
@@ -39,12 +45,15 @@ Data-quality findings are designed as **review signals rather than definitive cl
 - Automatic user profile creation
 - Secure sign-in, sign-up, and sign-out flows
 - Row Level Security across application tables
+- Server-side authorization for sensitive mutations
 - Server-only privileged Supabase operations
 - Role-based workspace authorization
 
-### Collaborative Workspaces
+---
 
-Users can create workspaces for organizing datasets and future collaboration.
+## Collaborative Workspaces
+
+Users can create workspaces for organizing datasets and collaborative review.
 
 Supported workspace roles:
 
@@ -55,7 +64,11 @@ Supported workspace roles:
 
 Workspace creation is handled atomically so the creator is automatically registered as the workspace owner.
 
-### Secure Dataset Upload
+Workspace membership determines access to datasets, issues, comments, and activity.
+
+---
+
+## Secure Dataset Upload
 
 DataRoom Live currently supports CSV datasets up to **20 MB**.
 
@@ -69,11 +82,14 @@ The upload pipeline includes:
 6. Dataset profiling
 7. Column metadata persistence
 8. Automatic data-quality analysis
-9. Activity tracking
+9. Automated issue generation
+10. Activity tracking
 
 Raw datasets remain in private Supabase Storage rather than being stored row-by-row in PostgreSQL.
 
-### CSV Profiling
+---
+
+## CSV Profiling
 
 Uploaded CSV files are parsed server-side using `csv-parse`.
 
@@ -97,9 +113,11 @@ Supported inferred types include:
 - Datetime
 - String
 
-The profiling logic also handles common missing representations and preserves leading-zero values where string semantics are likely.
+The profiling system handles common missing-value representations and preserves leading-zero values when string semantics are likely.
 
-### Automated Data-Quality Detection
+---
+
+## Automated Data-Quality Detection
 
 After profiling, DataRoom Live automatically runs deterministic quality detectors.
 
@@ -116,52 +134,233 @@ Currently supported detectors:
 - Leading/trailing whitespace anomalies
 - Unnamed columns
 
-No AI or LLM is used for quality detection. The rules are deterministic and explainable.
+No AI or LLM is used for quality detection.
 
-### Numeric Outlier Detection
+Detection rules are deterministic and explainable.
 
-Possible numeric outliers are detected using the **Interquartile Range (IQR)** method:
+---
+
+## Numeric Outlier Detection
+
+Possible numeric outliers are identified using the **Interquartile Range (IQR)** method:
 
 ```text
 Lower Bound = Q1 - 1.5 × IQR
 Upper Bound = Q3 + 1.5 × IQR
 ```
 
-Outlier findings are presented as potential review signals and are not automatically treated as invalid data.
+Outlier findings are presented as potential review signals rather than automatically being classified as invalid values.
 
-### Issue Severity
+---
 
-Quality findings use four severity levels:
+## Issue Severity
+
+Issues support four severity levels:
 
 - `low`
 - `medium`
 - `high`
 - `critical`
 
-Severity is calculated deterministically based on factors such as affected-value counts and ratios.
+Automated findings initially receive deterministic severity based on detector rules.
 
-### Data Quality Review
+Workspace owners and administrators can adjust severity during human review without altering the original automated detection provenance.
 
-Dataset detail pages provide a Data Quality section containing:
+---
 
-- Open issue count
-- Severity information
+# Collaborative Issue Review
+
+DataRoom Live supports both:
+
+- **Automated issues** generated by the quality engine
+- **Manual issues** created by workspace members
+
+Automated issues retain their detection provenance and metadata while participating in the same collaborative review workflow.
+
+---
+
+## Manual Issue Creation
+
+Authorized workspace members can create review issues directly from dataset detail pages.
+
+Manual issues support controlled issue categories and include:
+
+- Title
+- Description
+- Dataset
+- Optional affected column
 - Issue type
-- Affected column
-- Issue description
-- Issue status
-- Severity filters
-- Issue-type filters
+- Severity
 
-Individual findings can also be inspected through:
+Sensitive ownership and workspace information is derived server-side rather than trusted from browser input.
+
+---
+
+## Issue Workflow
+
+Issues move through controlled review states:
 
 ```text
-/issues/[issueId]
+Open
+  │
+  ├──→ In Progress
+  │        │
+  │        ├──→ Resolved
+  │        └──→ Dismissed
+  │
+  ├──→ Resolved
+  └──→ Dismissed
+
+Resolved ──→ Open
+Dismissed ──→ Open
+In Progress ──→ Open
 ```
 
-The issue page currently provides a read-only view of the detection result.
+Supported statuses:
 
-### Secure Dataset Downloads
+- `open`
+- `in_progress`
+- `resolved`
+- `dismissed`
+
+Invalid transitions are rejected server-side.
+
+Resolving or dismissing an issue can include resolution information.
+
+Reopening an issue clears its previous resolution state.
+
+---
+
+## Issue Assignment
+
+Issues can be assigned to workspace members.
+
+Supported actions include:
+
+- Assign an issue
+- Change assignee
+- Unassign an issue
+
+Assignment is validated server-side to ensure the selected user belongs to the same workspace.
+
+Users cannot assign issues to arbitrary external user IDs.
+
+---
+
+## Issue Comments
+
+Issue discussions support:
+
+- Adding comments
+- Editing your own comments
+- Deleting your own comments
+- Author information
+- Timestamps
+- Edited-state indication
+
+Comments are rendered safely as plain text.
+
+Workspace viewers can read discussions but cannot participate in them.
+
+Comment content is not copied into activity-event metadata.
+
+---
+
+## Issue Activity History
+
+Important workflow actions are recorded through structured activity events.
+
+Examples include:
+
+- Issue created
+- Issue assigned
+- Issue unassigned
+- Status changed
+- Issue resolved
+- Issue dismissed
+- Issue reopened
+- Severity changed
+- Comment added
+- Comment edited
+- Comment deleted
+
+The issue detail interface converts technical events into readable activity history.
+
+Activity metadata contains only necessary structured information and does not contain raw CSV rows or comment bodies.
+
+---
+
+## Issue Explorer
+
+The `/issues` workspace provides a centralized view of accessible issues.
+
+It supports:
+
+- Search
+- Workspace filtering
+- Dataset filtering
+- Severity filtering
+- Status filtering
+- Source filtering
+- Assigned-to-me filtering
+- Pagination
+
+Issue filters use URL parameters where appropriate so views can survive refreshes and be shared.
+
+---
+
+## Dataset Quality Review
+
+Dataset detail pages integrate automated and manual quality findings.
+
+Users can inspect:
+
+- Issue count
+- Highest severity
+- Issue type
+- Affected column
+- Current status
+- Assignee
+- Source
+- Issue details
+
+Authorized users can also create manual issues directly from the dataset.
+
+---
+
+## Dashboard
+
+The authenticated dashboard uses real application data.
+
+Current workflow metrics include:
+
+- Open issues
+- In-progress issues
+- Resolved issues
+- High/Critical unresolved issues
+- Issues assigned to the current user
+- Dataset quality signals
+
+No fake trend percentages or analytics are used.
+
+---
+
+## Activity Feed
+
+The `/activity` page presents readable workspace activity across:
+
+- Dataset processing
+- Automated quality analysis
+- Manual issues
+- Assignments
+- Status transitions
+- Comments
+
+Activity visibility remains scoped by workspace authorization.
+
+---
+
+## Secure Dataset Downloads
 
 Datasets are stored in a private Supabase Storage bucket.
 
@@ -169,34 +368,34 @@ Authorized workspace members can download original CSV files through temporary s
 
 Permanent public dataset URLs are not exposed.
 
-### Dashboard
+---
 
-The authenticated dashboard provides real application metrics including:
+# Role-Based Permissions
 
-- Open issue count
-- High/critical issue count
-- Datasets containing quality issues
-- Workspace and dataset information
+The application uses four workspace roles.
 
-No fake analytics data is used.
+| Capability | Owner | Admin | Member | Viewer |
+|---|:---:|:---:|:---:|:---:|
+| View workspace | ✓ | ✓ | ✓ | ✓ |
+| View datasets | ✓ | ✓ | ✓ | ✓ |
+| Download datasets | ✓ | ✓ | ✓ | ✓ |
+| Upload datasets | ✓ | ✓ | ✓ | — |
+| View issues | ✓ | ✓ | ✓ | ✓ |
+| Create manual issues | ✓ | ✓ | ✓ | — |
+| Assign issues | ✓ | ✓ | ✓ | — |
+| Change issue status | ✓ | ✓ | ✓ | — |
+| Change severity | ✓ | ✓ | — | — |
+| Add comments | ✓ | ✓ | ✓ | — |
+| Edit own comments | ✓ | ✓ | ✓ | — |
+| Delete own comments | ✓ | ✓ | ✓ | — |
 
-### Activity Tracking
-
-The platform records important dataset lifecycle events including:
-
-- Dataset upload started
-- Dataset processing completed
-- Dataset processing failed
-- Quality analysis completed
-- Quality issues detected
-
-Activity metadata does not contain raw CSV rows or sensitive dataset contents.
+Permissions are enforced server-side and through database security rather than relying only on hidden UI controls.
 
 ---
 
-## Tech Stack
+# Tech Stack
 
-### Frontend
+## Frontend
 
 - Next.js 16
 - React 19
@@ -204,14 +403,14 @@ Activity metadata does not contain raw CSV rows or sensitive dataset contents.
 - Tailwind CSS v4
 - shadcn/ui
 
-### Backend
+## Backend
 
 - Next.js App Router
 - Next.js Route Handlers
 - Server Actions
 - Server Components
 
-### Database & Platform
+## Database & Platform
 
 - PostgreSQL
 - Supabase
@@ -220,50 +419,65 @@ Activity metadata does not contain raw CSV rows or sensitive dataset contents.
 - Supabase Row Level Security
 - Supabase SSR
 
-### Data Processing
+## Data Processing
 
 - Node.js
 - `csv-parse`
 - Custom deterministic dataset profiler
 - Custom data-quality detection engine
 
-### Planned Real-Time Layer
+## Planned Real-Time Layer
 
 - Supabase Realtime
 
 ---
 
-## Architecture
+# Architecture
 
-DataRoom Live uses a full-stack Next.js architecture with Supabase providing authentication, PostgreSQL, Storage, and the foundation for future real-time collaboration.
+DataRoom Live uses a full-stack Next.js architecture with Supabase providing authentication, PostgreSQL, Storage, authorization, and the foundation for future real-time collaboration.
 
 ```text
-Browser
-   │
-   ▼
-Next.js 16
-   │
-   ├── Server Components
-   ├── Server Actions
-   ├── Route Handlers
-   │
-   ▼
-Supabase
-   │
-   ├── Auth
-   ├── PostgreSQL
-   ├── Row Level Security
-   ├── Private Storage
-   └── Realtime (planned)
+                         ┌─────────────────┐
+                         │     Browser     │
+                         └────────┬────────┘
+                                  │
+                                  ▼
+                       ┌─────────────────────┐
+                       │     Next.js 16      │
+                       │                     │
+                       │ Server Components   │
+                       │ Server Actions      │
+                       │ Route Handlers      │
+                       └──────────┬──────────┘
+                                  │
+                ┌─────────────────┴─────────────────┐
+                │                                   │
+                ▼                                   ▼
+       ┌─────────────────┐                ┌─────────────────┐
+       │ Supabase Auth   │                │   PostgreSQL    │
+       └─────────────────┘                │      + RLS      │
+                                          └────────┬────────┘
+                                                   │
+                                                   ▼
+                                          ┌─────────────────┐
+                                          │ Private Storage │
+                                          └─────────────────┘
 ```
 
-Dataset processing follows:
+Future Realtime subscriptions will integrate with this architecture without replacing the existing server-side authorization model.
+
+---
+
+# Dataset Processing Pipeline
 
 ```text
 CSV Upload
     │
     ▼
-Validation
+File Validation
+    │
+    ▼
+Workspace Authorization
     │
     ▼
 Private Supabase Storage
@@ -281,83 +495,133 @@ Column Metadata
 Data Quality Engine
     │
     ▼
-Automated Quality Issues
+Automated Issues
     │
     ▼
-Review Interface
+Collaborative Review
+    │
+    ├── Assignment
+    ├── Status
+    ├── Severity
+    ├── Comments
+    └── Activity History
 ```
 
 ---
 
-## Database Model
+# Database Model
 
-The current database includes:
+The application currently includes the following core tables.
 
-### `profiles`
+## `profiles`
 
-Stores application profile information linked to Supabase Auth users.
+Application profile information linked to Supabase Auth users.
 
-### `workspaces`
+## `workspaces`
 
-Represents collaborative dataset-review environments.
+Collaborative dataset-review environments.
 
-### `workspace_members`
+## `workspace_members`
 
-Associates users with workspaces and their authorization roles.
+Associates users with workspaces and authorization roles.
 
-### `datasets`
+## `datasets`
 
 Stores dataset metadata and processing state.
 
-Dataset statuses include:
+Dataset statuses:
 
 - `pending`
 - `processing`
 - `ready`
 - `failed`
 
-### `dataset_columns`
+## `dataset_columns`
 
 Stores column-level profiling metadata.
 
-### `data_quality_issues`
+## `data_quality_issues`
 
-Stores manual and automatically generated quality findings.
+Stores automated and manually created quality issues.
 
-Automated findings include structured detection metadata and deterministic issue keys to support idempotent processing.
+Includes workflow information such as:
 
-### `issue_comments`
+- Severity
+- Status
+- Assignment
+- Source
+- Detection metadata
+- Automated issue key
+- Resolution information
+- Resolution actor
+- Timestamps
 
-Schema foundation for future collaborative issue discussions.
+## `issue_comments`
 
-### `activity_events`
+Stores collaborative issue discussions.
 
-Stores workspace and dataset lifecycle events.
+## `activity_events`
 
----
-
-## Row Level Security
-
-Row Level Security is enabled across application tables.
-
-Authorization is primarily derived from workspace membership.
-
-General access model:
-
-| Role | Read | Upload Dataset | Modify Data |
-|---|---|---|---|
-| Owner | Yes | Yes | Yes |
-| Admin | Yes | Yes | Yes |
-| Member | Yes | Yes | Yes |
-| Viewer | Yes | No | No |
-
-Server-side authorization is also performed before sensitive mutations.
-
-Automated issues cannot be forged directly by ordinary clients.
+Stores dataset and issue lifecycle events.
 
 ---
 
-## Project Structure
+# Automated Issue Idempotency
+
+Repeated quality analysis does not blindly duplicate automated findings.
+
+Automated issues use deterministic issue identity while preserving human review state where appropriate.
+
+Manual issues are not removed during automated re-analysis.
+
+This allows automated detection and human review to coexist safely.
+
+---
+
+# Security Model
+
+DataRoom Live uses multiple layers of authorization.
+
+### Row Level Security
+
+RLS controls access to application data according to workspace membership.
+
+### Server-Side Authorization
+
+Sensitive mutations validate:
+
+- Authenticated user
+- Workspace membership
+- Workspace role
+- Dataset ownership
+- Column ownership
+- Issue state
+- Assignee membership
+- Comment ownership
+
+### Protected Automated Findings
+
+Ordinary clients cannot:
+
+- Forge automated issues
+- Change issue source
+- Modify automated issue keys
+- Replace detection metadata
+- Move issues between workspaces
+
+### Private Storage
+
+Raw datasets are stored in private Supabase Storage.
+
+Downloads use temporary signed URLs after authorization.
+
+### Server Secrets
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never enter the browser bundle.
+
+---
+
+# Project Structure
 
 ```text
 DataRoom Live/
@@ -365,7 +629,8 @@ DataRoom Live/
 │   ├── architecture.md
 │   ├── database.md
 │   ├── dataset-processing.md
-│   └── data-quality.md
+│   ├── data-quality.md
+│   └── issue-workflow.md
 │
 ├── public/
 │
@@ -373,6 +638,11 @@ DataRoom Live/
 │   ├── app/
 │   │   ├── (auth)/
 │   │   ├── (dashboard)/
+│   │   │   ├── dashboard/
+│   │   │   ├── datasets/
+│   │   │   ├── issues/
+│   │   │   ├── workspaces/
+│   │   │   └── activity/
 │   │   ├── api/
 │   │   ├── auth/
 │   │   ├── globals.css
@@ -380,16 +650,11 @@ DataRoom Live/
 │   │   └── page.tsx
 │   │
 │   ├── components/
-│   │   ├── auth/
-│   │   ├── layout/
-│   │   ├── shared/
-│   │   ├── ui/
-│   │   └── workspaces/
-│   │
 │   ├── lib/
 │   │   ├── auth/
 │   │   ├── data-quality/
 │   │   ├── datasets/
+│   │   ├── issues/
 │   │   ├── supabase/
 │   │   └── utils/
 │   │
@@ -406,22 +671,22 @@ DataRoom Live/
 
 ---
 
-## Getting Started
+# Getting Started
 
-### 1. Clone the Repository
+## 1. Clone the Repository
 
 ```bash
 git clone git@github.com:lakshithlokesh06/data-room-live.git
 cd data-room-live
 ```
 
-### 2. Install Dependencies
+## 2. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Configure Environment Variables
+## 3. Configure Environment Variables
 
 Create:
 
@@ -439,32 +704,42 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are intended for browser-compatible Supabase access.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are browser-compatible Supabase configuration values.
 
-`SUPABASE_SERVICE_ROLE_KEY` is **server-only** and must never be exposed to Client Components or committed to Git.
+`SUPABASE_SERVICE_ROLE_KEY` is **server-only** and must never be committed or exposed to Client Components.
 
-### 4. Configure Supabase
+---
 
-Create or connect a Supabase project and apply the migrations from:
+## 4. Configure Supabase
+
+Create or connect a Supabase project and apply migrations from:
 
 ```text
 supabase/migrations/
 ```
 
-Apply them in filename order.
+Apply migrations in filename order.
 
 The migrations configure:
 
-- Core application tables
+- Core database schema
 - Foreign keys and constraints
+- User profiles
+- Workspace membership
 - Row Level Security
-- Workspace authorization
-- Profile creation
 - Atomic workspace creation
-- Private dataset Storage policies
-- Automated data-quality issue support
+- Dataset Storage policies
+- Automated quality detection
+- Manual issue workflow
+- Resolution fields
+- Comment security
+- Activity security
 
-### 5. Configure Authentication
+The current local checkout has validated migrations against a local PostgreSQL rollback transaction, but they must still be applied to the actual Supabase project.
+
+---
+
+## 5. Configure Authentication
 
 Configure the Supabase Auth Site URL and allowed redirect URLs.
 
@@ -477,7 +752,9 @@ http://localhost:3000/auth/callback
 
 Add equivalent production URLs when deploying.
 
-### 6. Start Development Server
+---
+
+## 6. Start Development Server
 
 ```bash
 npm run dev
@@ -491,7 +768,7 @@ http://localhost:3000
 
 ---
 
-## Quality Checks
+# Quality Checks
 
 Run:
 
@@ -502,11 +779,11 @@ npm test
 npm run build
 ```
 
-At the completion of the automated data-quality phase, the project validation suite contains:
+At completion of Phase 5:
 
 ```text
-16 test files
-45 passing tests
+17 test files
+51 passing tests
 ```
 
 Tests cover areas including:
@@ -519,44 +796,81 @@ Tests cover areas including:
 - Type inference
 - Dataset profiling
 - Data-quality detectors
-- Severity logic
-- Detector orchestration
+- Severity rules
+- Issue status transitions
+- Role permissions
+- Manual issue validation
+- Assignment validation
+- Comment validation
+- Workflow behavior
+- Automated issue provenance
 
 ---
 
-## Current Development Status
+# Current Development Status
 
-Completed:
+### Foundation
 
-- [x] Project foundation
+- [x] Next.js application architecture
 - [x] Responsive SaaS interface
-- [x] Supabase integration foundation
-- [x] Authentication
-- [x] Protected application routes
-- [x] PostgreSQL schema
+- [x] Supabase client architecture
+- [x] Domain models
+
+### Authentication & Workspaces
+
+- [x] Supabase Auth
+- [x] Protected routes
+- [x] User profiles
+- [x] Workspace creation
+- [x] Workspace membership
+- [x] Role-based access
 - [x] Row Level Security
-- [x] Workspace creation and membership
-- [x] Private dataset Storage
-- [x] CSV upload
+
+### Dataset Processing
+
+- [x] Private Supabase Storage
+- [x] Secure CSV upload
+- [x] CSV parsing
 - [x] Dataset profiling
 - [x] Column metadata
-- [x] Secure dataset downloads
-- [x] Automated data-quality detection
-- [x] Structured quality issues
-- [x] Issue severity classification
-- [x] Dataset quality overview
-- [x] Read-only issue details
-- [x] Real dashboard issue metrics
-- [x] Activity tracking
+- [x] Secure downloads
+- [x] Processing failure handling
 
-Planned:
+### Data Quality
 
-- [ ] Manual issue creation
-- [ ] Issue assignment
-- [ ] Issue status workflow
-- [ ] Issue comments
-- [ ] Supabase Realtime subscriptions
-- [ ] Live collaboration
+- [x] Missing-value detection
+- [x] Duplicate detection
+- [x] Constant-column detection
+- [x] High-cardinality detection
+- [x] Mixed-type detection
+- [x] Numeric outlier detection
+- [x] Category consistency detection
+- [x] Date consistency detection
+- [x] Whitespace anomaly detection
+- [x] Unnamed-column detection
+- [x] Automated issue generation
+
+### Issue Review
+
+- [x] Manual issue creation
+- [x] Issue explorer
+- [x] Search and filtering
+- [x] Assignment
+- [x] Controlled status transitions
+- [x] Resolution/dismissal
+- [x] Reopening
+- [x] Severity editing
+- [x] Comments
+- [x] Comment editing
+- [x] Comment deletion
+- [x] Activity history
+- [x] Dashboard workflow metrics
+
+### Planned
+
+- [ ] Supabase Realtime
+- [ ] Live issue updates
+- [ ] Live comments
 - [ ] Presence indicators
 - [ ] Workspace invitations
 - [ ] Member management
@@ -566,60 +880,89 @@ Planned:
 
 ---
 
-## Data Quality Philosophy
+# Development Roadmap
 
-Automated findings in DataRoom Live are intended to identify **potential data-quality concerns for human review**.
+## Phase 1 — Foundation
 
-For example, a statistical outlier may represent a legitimate observation rather than an error. Similarly, high cardinality or missing data may be completely valid depending on the dataset and its intended use.
+Next.js application architecture, responsive interface, Supabase clients, domain types, and documentation.
 
-For this reason, DataRoom Live treats automated detection as a review workflow rather than automatic factual validation or automatic data modification.
+**Status: Complete**
 
----
+## Phase 2 — Database & Authentication
 
-## Roadmap
+PostgreSQL schema, RLS, Supabase Auth, profiles, workspace membership, protected routes, and atomic workspace creation.
 
-### Phase 1 — Foundation
-Next.js application architecture, responsive UI, Supabase clients, domain types, and documentation.
+**Status: Complete**
 
-### Phase 2 — Database & Authentication
-PostgreSQL schema, RLS, Supabase Auth, profiles, workspace membership, and protected routes.
+## Phase 3 — Dataset Processing
 
-### Phase 3 — Dataset Processing
-Private Storage, secure CSV uploads, parsing, profiling, metadata extraction, downloads, and activity tracking.
+Private Storage, CSV uploads, parsing, profiling, column metadata, secure downloads, and activity tracking.
 
-### Phase 4 — Data Quality
+**Status: Complete**
+
+## Phase 4 — Automated Data Quality
+
 Deterministic quality detectors, automated issues, severity classification, dataset quality views, and issue inspection.
 
-### Phase 5 — Collaborative Issue Workflow
-Manual issues, assignments, status transitions, resolution/dismissal, and comments.
+**Status: Complete**
 
-### Phase 6 — Real-Time Collaboration
-Supabase Realtime subscriptions, live issue/comment updates, presence, and collaboration indicators.
+## Phase 5 — Collaborative Issue Review
 
-### Future
-Workspace invitations, notifications, dataset preview, richer analytics, and production-readiness improvements.
+Manual issue creation, assignments, status transitions, severity management, resolution workflows, comments, activity history, issue search, filtering, and workflow metrics.
+
+**Status: Complete**
+
+## Phase 6 — Real-Time Collaboration
+
+Planned:
+
+- Supabase Realtime subscriptions
+- Live issue updates
+- Live comment updates
+- Presence
+- Collaboration indicators
+- Realtime-safe cache synchronization
+
+**Status: Planned**
+
+## Future Enhancements
+
+Potential future work includes:
+
+- Workspace invitations
+- Member management
+- Notifications
+- Dataset row preview
+- Dataset versioning
+- Advanced quality analytics
+- Additional dataset formats
+- Production observability and deployment hardening
 
 ---
 
-## Security
+# Data Quality Philosophy
 
-DataRoom Live follows several security principles:
+Automated findings in DataRoom Live identify **potential concerns for human review**.
 
-- Private dataset Storage
-- Row Level Security
-- Server-side authorization
-- Workspace-scoped access
-- Role-based permissions
-- Temporary signed dataset URLs
-- Server-only service-role credentials
-- No raw CSV rows stored in issue metadata
-- No client-controlled user identity for privileged mutations
-- Automated issue creation protected from client forgery
+A statistical outlier, high-cardinality column, missing value, or inconsistent representation does not necessarily mean that the underlying data is incorrect.
 
-Never commit `.env.local` or real Supabase credentials.
+Context matters.
+
+For this reason, DataRoom Live combines deterministic automated detection with a human review workflow rather than automatically modifying or declaring data invalid.
 
 ---
 
-## License
+# Known Limitations
+
+- CSV is currently the only supported dataset format.
+- Dataset uploads are limited to 20 MB.
+- Automated quality detection uses deterministic heuristics and may produce false positives.
+- Realtime collaboration is not implemented yet.
+- Activity recording currently occurs separately from issue mutations, so a successful issue mutation can theoretically occur even if its corresponding activity write fails.
+- Migrations still need to be applied to the connected production Supabase project.
+
+---
+
+# License
 
 This project is intended as a portfolio and educational software project.
