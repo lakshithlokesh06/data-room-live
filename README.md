@@ -2,9 +2,9 @@
 
 **Real-Time Collaborative Dataset Review Workspace**
 
-DataRoom Live is a modern collaborative data-quality review platform designed for data teams to securely upload datasets, automatically profile their structure, detect potential data-quality problems, and collaboratively review findings within shared workspaces.
+DataRoom Live is a full-stack collaborative data-quality review platform built for teams to securely upload datasets, automatically profile their structure, detect potential quality problems, and review findings together in real time.
 
-The platform combines secure workspace-based access control, CSV profiling, deterministic data-quality detection, structured issue tracking, assignments, comments, resolution workflows, and activity history to provide an end-to-end dataset review environment.
+The platform combines secure workspace-based access control, CSV profiling, deterministic data-quality detection, structured issue tracking, assignments, comments, activity history, Supabase Realtime synchronization, and workspace presence into a single review environment.
 
 > Collaborative data quality review for modern data teams.
 
@@ -12,7 +12,7 @@ The platform combines secure workspace-based access control, CSV profiling, dete
 
 ## Overview
 
-Data quality problems such as missing values, duplicate records, inconsistent formats, suspicious outliers, malformed columns, and schema inconsistencies can significantly affect downstream analytics and machine learning workflows.
+Data quality problems such as missing values, duplicate records, inconsistent formats, suspicious outliers, malformed columns, and schema inconsistencies can significantly affect analytics and machine learning workflows.
 
 DataRoom Live provides a centralized workspace where teams can:
 
@@ -24,14 +24,16 @@ DataRoom Live provides a centralized workspace where teams can:
 - Create manual review issues
 - Review automated findings
 - Assign issues to workspace members
-- Track issue status
+- Track issue status and severity
 - Resolve, dismiss, and reopen findings
 - Discuss issues through comments
 - Review issue activity history
+- See issue and activity changes without manually refreshing
+- See active collaborators through workspace presence
 - Monitor workspace and dataset activity
 - Securely access datasets based on workspace roles
 
-Automated data-quality findings are designed as **review signals rather than definitive claims that data is incorrect**.
+Automated findings are designed as **review signals rather than definitive claims that data is incorrect**.
 
 ---
 
@@ -39,15 +41,16 @@ Automated data-quality findings are designed as **review signals rather than def
 
 ## Authentication & Security
 
-- Email/password authentication using Supabase Auth
+- Email/password authentication with Supabase Auth
 - Server-side session handling with Supabase SSR
 - Protected application routes
 - Automatic user profile creation
-- Secure sign-in, sign-up, and sign-out flows
-- Row Level Security across application tables
+- Secure sign-in, sign-up, and sign-out
+- PostgreSQL Row Level Security
 - Server-side authorization for sensitive mutations
 - Server-only privileged Supabase operations
-- Role-based workspace authorization
+- Workspace role-based authorization
+- Realtime authorization scoped to workspace membership
 
 ---
 
@@ -55,16 +58,16 @@ Automated data-quality findings are designed as **review signals rather than def
 
 Users can create workspaces for organizing datasets and collaborative review.
 
-Supported workspace roles:
+Supported roles:
 
 - `owner`
 - `admin`
 - `member`
 - `viewer`
 
-Workspace creation is handled atomically so the creator is automatically registered as the workspace owner.
+Workspace creation is handled atomically so the creator becomes the workspace owner.
 
-Workspace membership determines access to datasets, issues, comments, and activity.
+Workspace membership determines access to datasets, issues, comments, activity, and Realtime collaboration channels.
 
 ---
 
@@ -72,7 +75,7 @@ Workspace membership determines access to datasets, issues, comments, and activi
 
 DataRoom Live currently supports CSV datasets up to **20 MB**.
 
-The upload pipeline includes:
+The processing pipeline includes:
 
 1. File validation
 2. Workspace authorization
@@ -84,6 +87,7 @@ The upload pipeline includes:
 8. Automatic data-quality analysis
 9. Automated issue generation
 10. Activity tracking
+11. Realtime propagation of relevant review changes
 
 Raw datasets remain in private Supabase Storage rather than being stored row-by-row in PostgreSQL.
 
@@ -113,15 +117,15 @@ Supported inferred types include:
 - Datetime
 - String
 
-The profiling system handles common missing-value representations and preserves leading-zero values when string semantics are likely.
+The profiler handles common missing-value representations and preserves leading-zero values when string semantics are likely.
 
 ---
 
-## Automated Data-Quality Detection
+# Automated Data-Quality Detection
 
-After profiling, DataRoom Live automatically runs deterministic quality detectors.
+After profiling, DataRoom Live runs deterministic quality detectors.
 
-Currently supported detectors:
+Current detectors include:
 
 - Missing values
 - Duplicate rows
@@ -134,7 +138,7 @@ Currently supported detectors:
 - Leading/trailing whitespace anomalies
 - Unnamed columns
 
-No AI or LLM is used for quality detection.
+No AI or LLM is required for the current detection engine.
 
 Detection rules are deterministic and explainable.
 
@@ -149,7 +153,7 @@ Lower Bound = Q1 - 1.5 × IQR
 Upper Bound = Q3 + 1.5 × IQR
 ```
 
-Outlier findings are presented as potential review signals rather than automatically being classified as invalid values.
+Outlier findings are presented as review signals rather than automatically being classified as invalid data.
 
 ---
 
@@ -164,41 +168,41 @@ Issues support four severity levels:
 
 Automated findings initially receive deterministic severity based on detector rules.
 
-Workspace owners and administrators can adjust severity during human review without altering the original automated detection provenance.
+Workspace owners and administrators can adjust severity during human review without altering automated detection provenance.
 
 ---
 
 # Collaborative Issue Review
 
-DataRoom Live supports both:
+DataRoom Live supports:
 
 - **Automated issues** generated by the quality engine
 - **Manual issues** created by workspace members
 
-Automated issues retain their detection provenance and metadata while participating in the same collaborative review workflow.
+Both participate in the collaborative review workflow while automated findings retain their original detection metadata and source.
 
 ---
 
 ## Manual Issue Creation
 
-Authorized workspace members can create review issues directly from dataset detail pages.
+Authorized users can create review issues directly from dataset detail pages.
 
-Manual issues support controlled issue categories and include:
+Manual issues support:
 
 - Title
 - Description
 - Dataset
 - Optional affected column
-- Issue type
+- Controlled issue type
 - Severity
 
-Sensitive ownership and workspace information is derived server-side rather than trusted from browser input.
+Sensitive fields such as workspace, creator, and source are derived server-side rather than trusted from browser input.
 
 ---
 
 ## Issue Workflow
 
-Issues move through controlled review states:
+Issues use controlled workflow states:
 
 ```text
 Open
@@ -225,31 +229,29 @@ Supported statuses:
 
 Invalid transitions are rejected server-side.
 
-Resolving or dismissing an issue can include resolution information.
+Resolving or dismissing an issue can store resolution information.
 
-Reopening an issue clears its previous resolution state.
+Reopening clears its previous resolution state.
 
 ---
 
 ## Issue Assignment
 
-Issues can be assigned to workspace members.
+Issues can be assigned to members of the same workspace.
 
 Supported actions include:
 
-- Assign an issue
-- Change assignee
-- Unassign an issue
+- Assign
+- Reassign
+- Unassign
 
-Assignment is validated server-side to ensure the selected user belongs to the same workspace.
-
-Users cannot assign issues to arbitrary external user IDs.
+Assignment is validated server-side to prevent users from assigning issues to arbitrary or external user IDs.
 
 ---
 
 ## Issue Comments
 
-Issue discussions support:
+Collaborative issue discussions support:
 
 - Adding comments
 - Editing your own comments
@@ -257,122 +259,143 @@ Issue discussions support:
 - Author information
 - Timestamps
 - Edited-state indication
+- Live comment refresh
 
-Comments are rendered safely as plain text.
+Comments are rendered as plain text.
 
-Workspace viewers can read discussions but cannot participate in them.
+Workspace viewers can read discussions but cannot participate.
 
-Comment content is not copied into activity-event metadata.
+Comment content is not stored inside activity-event metadata.
 
 ---
 
-## Issue Activity History
+# Real-Time Collaboration
 
-Important workflow actions are recorded through structured activity events.
+DataRoom Live uses **Supabase Realtime** to synchronize collaborative review activity.
+
+Relevant views update when scoped database or broadcast events arrive without requiring users to manually refresh the page.
+
+Realtime functionality currently covers:
+
+- Issue updates
+- Dataset quality views
+- Dashboard review information
+- Activity updates
+- Comment creation
+- Comment editing
+- Comment deletion
+- Workspace Presence
+
+Existing server actions and database authorization remain the source of truth.
+
+Realtime is used for synchronization rather than authorization.
+
+---
+
+## Live Issue Updates
+
+Changes to data-quality issues can automatically refresh relevant application views.
 
 Examples include:
 
-- Issue created
-- Issue assigned
-- Issue unassigned
-- Status changed
-- Issue resolved
-- Issue dismissed
-- Issue reopened
-- Severity changed
-- Comment added
-- Comment edited
-- Comment deleted
+- New issues
+- Assignment changes
+- Status changes
+- Severity changes
+- Resolution
+- Dismissal
+- Reopening
 
-The issue detail interface converts technical events into readable activity history.
-
-Activity metadata contains only necessary structured information and does not contain raw CSV rows or comment bodies.
+Issue detail views can therefore reflect changes made by another authorized collaborator without requiring a manual browser refresh.
 
 ---
 
-## Issue Explorer
+## Live Comments
 
-The `/issues` workspace provides a centralized view of accessible issues.
+Comment synchronization uses a private workspace-scoped broadcast mechanism.
 
-It supports:
+Comment events carry only the information required to trigger a safe refresh, such as the relevant issue identifier.
 
-- Search
-- Workspace filtering
-- Dataset filtering
-- Severity filtering
-- Status filtering
-- Source filtering
-- Assigned-to-me filtering
-- Pagination
+This avoids broadcasting comment content directly.
 
-Issue filters use URL parameters where appropriate so views can survive refreshes and be shared.
+The server/database remains the source of truth for retrieving the updated discussion.
 
 ---
 
-## Dataset Quality Review
+## Live Activity
 
-Dataset detail pages integrate automated and manual quality findings.
+Persisted activity changes can trigger updates on:
 
-Users can inspect:
+- `/activity`
+- Issue activity/history views
+- Other relevant workflow surfaces
 
-- Issue count
-- Highest severity
-- Issue type
-- Affected column
-- Current status
-- Assignee
-- Source
-- Issue details
+Realtime reflects persisted activity only.
 
-Authorized users can also create manual issues directly from the dataset.
+It does not fabricate an activity event if the underlying activity write fails.
 
 ---
 
-## Dashboard
+# Workspace Presence
 
-The authenticated dashboard uses real application data.
+Supabase Realtime Presence provides lightweight information about collaborators currently active in a workspace context.
 
-Current workflow metrics include:
+Presence may display information such as:
 
-- Open issues
-- In-progress issues
-- Resolved issues
-- High/Critical unresolved issues
-- Issues assigned to the current user
-- Dataset quality signals
+```text
+3 people active
+```
 
-No fake trend percentages or analytics are used.
+and compact collaborator indicators.
 
----
+Presence payloads contain only minimal information such as:
 
-## Activity Feed
+- Authenticated user identifier
+- Display name
+- Existing avatar URL where available
 
-The `/activity` page presents readable workspace activity across:
+Email addresses and unnecessary profile information are not included in Presence payloads.
 
-- Dataset processing
-- Automated quality analysis
-- Manual issues
-- Assignments
-- Status transitions
-- Comments
+Presence handles joining, leaving, reconnection, and normal browser lifecycle changes.
 
-Activity visibility remains scoped by workspace authorization.
+Presence indicates an active Realtime session and should not be treated as proof of a person's identity.
 
 ---
 
-## Secure Dataset Downloads
+# Realtime Architecture
 
-Datasets are stored in a private Supabase Storage bucket.
+DataRoom Live uses both PostgreSQL changes and private Realtime channels.
 
-Authorized workspace members can download original CSV files through temporary signed URLs.
+```text
+                     ┌──────────────────────┐
+                     │      Browser A       │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │  Supabase Realtime   │
+                     │                      │
+                     │ Postgres Changes     │
+                     │ Private Broadcast    │
+                     │ Presence             │
+                     └──────────┬───────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+                    ▼                       ▼
+          ┌──────────────────┐    ┌──────────────────┐
+          │    Browser B     │    │    PostgreSQL    │
+          │                  │    │      + RLS       │
+          │ Refreshes server │    │ Source of truth  │
+          │ backed data      │    │                  │
+          └──────────────────┘    └──────────────────┘
+```
 
-Permanent public dataset URLs are not exposed.
+Realtime notifications trigger safe synchronization with server-backed application data rather than replacing the existing data-access architecture.
 
 ---
 
 # Role-Based Permissions
-
-The application uses four workspace roles.
 
 | Capability | Owner | Admin | Member | Viewer |
 |---|:---:|:---:|:---:|:---:|
@@ -388,8 +411,10 @@ The application uses four workspace roles.
 | Add comments | ✓ | ✓ | ✓ | — |
 | Edit own comments | ✓ | ✓ | ✓ | — |
 | Delete own comments | ✓ | ✓ | ✓ | — |
+| Receive authorized Realtime updates | ✓ | ✓ | ✓ | ✓ |
+| Participate in workspace Presence | ✓ | ✓ | ✓ | ✓ |
 
-Permissions are enforced server-side and through database security rather than relying only on hidden UI controls.
+Realtime does not grant additional mutation permissions.
 
 ---
 
@@ -406,9 +431,9 @@ Permissions are enforced server-side and through database security rather than r
 ## Backend
 
 - Next.js App Router
-- Next.js Route Handlers
-- Server Actions
 - Server Components
+- Server Actions
+- Route Handlers
 
 ## Database & Platform
 
@@ -416,6 +441,7 @@ Permissions are enforced server-side and through database security rather than r
 - Supabase
 - Supabase Auth
 - Supabase Storage
+- Supabase Realtime
 - Supabase Row Level Security
 - Supabase SSR
 
@@ -426,15 +452,9 @@ Permissions are enforced server-side and through database security rather than r
 - Custom deterministic dataset profiler
 - Custom data-quality detection engine
 
-## Planned Real-Time Layer
-
-- Supabase Realtime
-
 ---
 
-# Architecture
-
-DataRoom Live uses a full-stack Next.js architecture with Supabase providing authentication, PostgreSQL, Storage, authorization, and the foundation for future real-time collaboration.
+# Application Architecture
 
 ```text
                          ┌─────────────────┐
@@ -450,21 +470,21 @@ DataRoom Live uses a full-stack Next.js architecture with Supabase providing aut
                        │ Route Handlers      │
                        └──────────┬──────────┘
                                   │
-                ┌─────────────────┴─────────────────┐
-                │                                   │
-                ▼                                   ▼
-       ┌─────────────────┐                ┌─────────────────┐
-       │ Supabase Auth   │                │   PostgreSQL    │
-       └─────────────────┘                │      + RLS      │
-                                          └────────┬────────┘
-                                                   │
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │ Private Storage │
-                                          └─────────────────┘
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+     ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+     │ Supabase Auth   │ │   PostgreSQL    │ │    Realtime     │
+     │                 │ │      + RLS      │ │                 │
+     └─────────────────┘ └────────┬────────┘ │ Changes         │
+                                  │          │ Broadcast       │
+                                  │          │ Presence        │
+                                  │          └─────────────────┘
+                                  ▼
+                         ┌─────────────────┐
+                         │ Private Storage │
+                         └─────────────────┘
 ```
-
-Future Realtime subscriptions will integrate with this architecture without replacing the existing server-side authorization model.
 
 ---
 
@@ -504,7 +524,15 @@ Collaborative Review
     ├── Status
     ├── Severity
     ├── Comments
-    └── Activity History
+    └── Activity
+            │
+            ▼
+      Realtime Sync
+            │
+            ├── Issue updates
+            ├── Comment refresh
+            ├── Activity refresh
+            └── Presence
 ```
 
 ---
@@ -542,9 +570,7 @@ Stores column-level profiling metadata.
 
 ## `data_quality_issues`
 
-Stores automated and manually created quality issues.
-
-Includes workflow information such as:
+Stores automated and manually created quality issues, including:
 
 - Severity
 - Status
@@ -582,11 +608,11 @@ This allows automated detection and human review to coexist safely.
 
 DataRoom Live uses multiple layers of authorization.
 
-### Row Level Security
+## Row Level Security
 
-RLS controls access to application data according to workspace membership.
+PostgreSQL RLS controls application data according to workspace membership.
 
-### Server-Side Authorization
+## Server-Side Authorization
 
 Sensitive mutations validate:
 
@@ -599,7 +625,7 @@ Sensitive mutations validate:
 - Assignee membership
 - Comment ownership
 
-### Protected Automated Findings
+## Protected Automated Findings
 
 Ordinary clients cannot:
 
@@ -609,15 +635,21 @@ Ordinary clients cannot:
 - Replace detection metadata
 - Move issues between workspaces
 
-### Private Storage
+## Realtime Authorization
+
+Private Realtime Presence and Broadcast channels are restricted to authorized workspace members.
+
+Realtime synchronization does not bypass the existing application authorization model.
+
+## Private Storage
 
 Raw datasets are stored in private Supabase Storage.
 
-Downloads use temporary signed URLs after authorization.
+Authorized downloads use temporary signed URLs.
 
-### Server Secrets
+## Server Secrets
 
-`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never enter the browser bundle.
+`SUPABASE_SERVICE_ROLE_KEY` remains server-only and must never enter the browser bundle.
 
 ---
 
@@ -630,7 +662,8 @@ DataRoom Live/
 │   ├── database.md
 │   ├── dataset-processing.md
 │   ├── data-quality.md
-│   └── issue-workflow.md
+│   ├── issue-workflow.md
+│   └── realtime.md
 │
 ├── public/
 │
@@ -650,11 +683,14 @@ DataRoom Live/
 │   │   └── page.tsx
 │   │
 │   ├── components/
+│   │   └── realtime/
+│   │
 │   ├── lib/
 │   │   ├── auth/
 │   │   ├── data-quality/
 │   │   ├── datasets/
 │   │   ├── issues/
+│   │   ├── realtime/
 │   │   ├── supabase/
 │   │   └── utils/
 │   │
@@ -704,9 +740,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are browser-compatible Supabase configuration values.
-
-`SUPABASE_SERVICE_ROLE_KEY` is **server-only** and must never be committed or exposed to Client Components.
+`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be committed or exposed to Client Components.
 
 ---
 
@@ -730,31 +764,65 @@ The migrations configure:
 - Atomic workspace creation
 - Dataset Storage policies
 - Automated quality detection
-- Manual issue workflow
+- Collaborative issue workflow
 - Resolution fields
 - Comment security
 - Activity security
+- Realtime publication
+- Private workspace Broadcast
+- Presence authorization
+- Comment Realtime trigger
 
-The current local checkout has validated migrations against a local PostgreSQL rollback transaction, but they must still be applied to the actual Supabase project.
+The migrations have been validated locally using PostgreSQL rollback transactions but still need to be applied to the actual Supabase project.
 
 ---
 
 ## 5. Configure Authentication
 
-Configure the Supabase Auth Site URL and allowed redirect URLs.
-
-For local development:
+For local development configure:
 
 ```text
 http://localhost:3000
 http://localhost:3000/auth/callback
 ```
 
+as appropriate Supabase Auth URLs.
+
 Add equivalent production URLs when deploying.
 
 ---
 
-## 6. Start Development Server
+## 6. Configure Realtime
+
+Apply:
+
+```text
+supabase/migrations/202609180002_realtime_collaboration.sql
+```
+
+as part of the normal migration sequence.
+
+Verify the required tables are included in the appropriate Realtime publication.
+
+The current architecture uses:
+
+- Postgres Changes for selected database changes
+- Private Broadcast for comment refresh signals
+- Private workspace Presence channels
+
+See:
+
+```text
+docs/realtime.md
+```
+
+for the project-specific configuration and security model.
+
+Hosted multi-user Realtime delivery should be verified after the project is connected and configured in Supabase.
+
+---
+
+## 7. Start Development Server
 
 ```bash
 npm run dev
@@ -779,21 +847,19 @@ npm test
 npm run build
 ```
 
-At completion of Phase 5:
+At completion of Phase 6:
 
 ```text
-17 test files
-51 passing tests
+19 test files
+57 passing tests
 ```
 
-Tests cover areas including:
+The test suite covers areas including:
 
 - Authentication validation
 - Workspace validation
 - CSV validation
 - CSV parsing
-- Missing-value handling
-- Type inference
 - Dataset profiling
 - Data-quality detectors
 - Severity rules
@@ -804,19 +870,23 @@ Tests cover areas including:
 - Comment validation
 - Workflow behavior
 - Automated issue provenance
+- Realtime event handling
+- Realtime scoping
+- Presence transformation
+- Collaboration synchronization utilities
 
 ---
 
 # Current Development Status
 
-### Foundation
+## Foundation
 
 - [x] Next.js application architecture
 - [x] Responsive SaaS interface
 - [x] Supabase client architecture
 - [x] Domain models
 
-### Authentication & Workspaces
+## Authentication & Workspaces
 
 - [x] Supabase Auth
 - [x] Protected routes
@@ -826,7 +896,7 @@ Tests cover areas including:
 - [x] Role-based access
 - [x] Row Level Security
 
-### Dataset Processing
+## Dataset Processing
 
 - [x] Private Supabase Storage
 - [x] Secure CSV upload
@@ -836,7 +906,7 @@ Tests cover areas including:
 - [x] Secure downloads
 - [x] Processing failure handling
 
-### Data Quality
+## Data Quality
 
 - [x] Missing-value detection
 - [x] Duplicate detection
@@ -850,7 +920,7 @@ Tests cover areas including:
 - [x] Unnamed-column detection
 - [x] Automated issue generation
 
-### Issue Review
+## Collaborative Review
 
 - [x] Manual issue creation
 - [x] Issue explorer
@@ -866,17 +936,28 @@ Tests cover areas including:
 - [x] Activity history
 - [x] Dashboard workflow metrics
 
-### Planned
+## Realtime Collaboration
 
-- [ ] Supabase Realtime
-- [ ] Live issue updates
-- [ ] Live comments
-- [ ] Presence indicators
+- [x] Supabase Realtime foundation
+- [x] Live issue refresh
+- [x] Live dataset quality refresh
+- [x] Live dashboard refresh
+- [x] Live activity refresh
+- [x] Live comment synchronization
+- [x] Private workspace Broadcast
+- [x] Workspace Presence
+- [x] Realtime workspace authorization
+- [x] Subscription cleanup
+- [x] Reconnect-safe architecture
+
+## Planned
+
 - [ ] Workspace invitations
 - [ ] Member management
-- [ ] Notifications
+- [ ] Review notifications
 - [ ] Dataset row preview
 - [ ] Advanced quality analytics
+- [ ] Production deployment hardening
 
 ---
 
@@ -884,7 +965,7 @@ Tests cover areas including:
 
 ## Phase 1 — Foundation
 
-Next.js application architecture, responsive interface, Supabase clients, domain types, and documentation.
+Next.js architecture, responsive interface, Supabase clients, domain types, and project documentation.
 
 **Status: Complete**
 
@@ -896,32 +977,38 @@ PostgreSQL schema, RLS, Supabase Auth, profiles, workspace membership, protected
 
 ## Phase 3 — Dataset Processing
 
-Private Storage, CSV uploads, parsing, profiling, column metadata, secure downloads, and activity tracking.
+Private Storage, CSV uploads, parsing, profiling, column metadata, secure downloads, and processing activity.
 
 **Status: Complete**
 
 ## Phase 4 — Automated Data Quality
 
-Deterministic quality detectors, automated issues, severity classification, dataset quality views, and issue inspection.
+Deterministic quality detectors, automated findings, severity classification, dataset quality views, and issue inspection.
 
 **Status: Complete**
 
 ## Phase 5 — Collaborative Issue Review
 
-Manual issue creation, assignments, status transitions, severity management, resolution workflows, comments, activity history, issue search, filtering, and workflow metrics.
+Manual issues, assignments, controlled status transitions, severity management, resolution workflows, comments, activity history, search, filtering, and dashboard workflow metrics.
 
 **Status: Complete**
 
 ## Phase 6 — Real-Time Collaboration
 
-Planned:
+Supabase Realtime integration for issue changes, comments, activity synchronization, workspace Presence, private Broadcast, authorization, and subscription lifecycle management.
 
-- Supabase Realtime subscriptions
-- Live issue updates
-- Live comment updates
-- Presence
-- Collaboration indicators
-- Realtime-safe cache synchronization
+**Status: Complete**
+
+## Phase 7 — Team Collaboration
+
+Planned scope:
+
+- Workspace invitations
+- Member management
+- Targeted review notifications
+- Invitation acceptance workflow
+- Role management
+- Collaboration UX improvements
 
 **Status: Planned**
 
@@ -929,14 +1016,12 @@ Planned:
 
 Potential future work includes:
 
-- Workspace invitations
-- Member management
-- Notifications
 - Dataset row preview
 - Dataset versioning
 - Advanced quality analytics
 - Additional dataset formats
-- Production observability and deployment hardening
+- Production observability
+- Deployment hardening
 
 ---
 
@@ -944,11 +1029,11 @@ Potential future work includes:
 
 Automated findings in DataRoom Live identify **potential concerns for human review**.
 
-A statistical outlier, high-cardinality column, missing value, or inconsistent representation does not necessarily mean that the underlying data is incorrect.
+A statistical outlier, high-cardinality column, missing value, or inconsistent representation does not necessarily mean the underlying data is incorrect.
 
 Context matters.
 
-For this reason, DataRoom Live combines deterministic automated detection with a human review workflow rather than automatically modifying or declaring data invalid.
+DataRoom Live therefore combines deterministic automated detection with collaborative human review instead of automatically modifying or declaring data invalid.
 
 ---
 
@@ -957,9 +1042,11 @@ For this reason, DataRoom Live combines deterministic automated detection with a
 - CSV is currently the only supported dataset format.
 - Dataset uploads are limited to 20 MB.
 - Automated quality detection uses deterministic heuristics and may produce false positives.
-- Realtime collaboration is not implemented yet.
-- Activity recording currently occurs separately from issue mutations, so a successful issue mutation can theoretically occur even if its corresponding activity write fails.
-- Migrations still need to be applied to the connected production Supabase project.
+- The Phase 6 Realtime migration must still be applied to the connected Supabase project.
+- Hosted multi-user Realtime delivery has not yet been verified against the final Supabase environment.
+- Presence indicates an active Realtime session and is not proof of identity.
+- A failed private comment broadcast may delay another client's comment refresh until another refresh/reconnect occurs.
+- Activity writes remain separate from issue mutations, so a successful workflow mutation can theoretically occur without its corresponding activity event if that separate write fails.
 
 ---
 
